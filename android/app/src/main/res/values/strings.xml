@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">My Accessibility Service for WiFi monitoring</string>
+    <string name="app_name">Exam-D</string>
+</resources>
