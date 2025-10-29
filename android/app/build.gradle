@@ -38,7 +38,7 @@ android {
 
     defaultConfig {
         applicationId "com.example.webdipo"
-        minSdkVersion 21               // ✅ Android 5.0 minimal
+        minSdkVersion flutter.minSdkVersion               // ✅ Android 5.0 minimal
         targetSdkVersion 34        // ✅ Android 14
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName

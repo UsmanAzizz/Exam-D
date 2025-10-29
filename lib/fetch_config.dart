@@ -102,6 +102,8 @@ class _ConfigPageState extends State<ConfigPage> {
 
     if (enteredPin == correctPin) {
       print('PIN benar.');
+        final prefs = await SharedPreferences.getInstance();
+       await prefs.setBool('pin_verified', true);
       _showStatus('PIN benar! Silakan unduh konfigurasi.',
           true); // sukses = true -> warna hijau
       setState(() {

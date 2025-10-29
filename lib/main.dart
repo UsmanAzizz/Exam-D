@@ -76,21 +76,26 @@ class _SplashDeciderState extends State<SplashDecider> {
   void initState() {
     super.initState();
     _checkPinVerified();
+    _fetchLocalData();
+    _fetchPenaltyDurationFromFirestore();
+     _fetchTestTimeAndSave();
   }
 
   Future<void> _checkPinVerified() async {
     final prefs = await SharedPreferences.getInstance();
-    final config = prefs.getString('local_data');
-    print('DEBUG: local_data = $config');
-    if (config == null || config.isEmpty) {
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/config');
-      }
-    } else {
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/login');
-      }
-    }
+   final pinVerified = prefs.getBool('pin_verified') ?? false;
+print('DEBUG: pin_verified = $pinVerified');
+
+if (pinVerified) {
+  if (mounted) {
+    Navigator.pushReplacementNamed(context, '/login');
+  }
+} else {
+  if (mounted) {
+    Navigator.pushReplacementNamed(context, '/config');
+  }
+}
+
   }
 
   @override
@@ -147,6 +152,7 @@ class _LoginPageState extends State<LoginPage> {
       pageBuilder: (context, animation1, animation2) {
         return Align(
           alignment: Alignment.bottomCenter,
+          
           child: Material(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             color: Colors.white,
@@ -250,8 +256,8 @@ class _LoginPageState extends State<LoginPage> {
                     icon: Icons.cloud_outlined,
                     title: 'Test Online',
                     color: Colors.blue.shade600,
-                    onTap: () => Navigator.pushNamed(context, '/remoteaccess'),
-                  ),
+                   onTap: () => _closeDialogAndNavigate(context, '/remoteaccess'),
+ ),
                   _buildMenuItem(
                     icon: Icons.sd_storage,
                     title: 'Server Lokal',
@@ -283,17 +289,15 @@ class _LoginPageState extends State<LoginPage> {
           ),
         );
       },
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
-        final curvedValue = Curves.easeInOut.transform(animation.value) - 1.0;
+     transitionBuilder: (context, animation, secondaryAnimation, child) {
+  final curvedValue = Curves.fastEaseInToSlowEaseOut.transform(animation.value) - 1.0;
 
-        return Transform.translate(
-          offset: Offset(0.0, curvedValue * -300),
-          child: Opacity(
-            opacity: animation.value,
-            child: child,
-          ),
-        );
-      },
+  return Transform.translate(
+    offset: Offset(0.0, curvedValue * -300),
+    child: child,
+  );
+},
+
     );
   }
 
@@ -428,49 +432,77 @@ class _LoginPageState extends State<LoginPage> {
               }
             }
 
-            return AlertDialog(
-              title: const Text(
-                'Masukkan PIN',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
-              ),
-              content: SizedBox(
-                width: double.maxFinite,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: pinDialogController,
-                      obscureText: true,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        errorText: dialogErrorText,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      maxLength: 6,
-                      onSubmitted: (_) => verifyPin(),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Batal'),
-                ),
-                ElevatedButton(
-                  onPressed: verifyPin,
-                  style: ElevatedButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 20, vertical: 12),
-                  ),
-                  child: const Text('Verifikasi'),
-                ),
-              ],
-            );
+           return AlertDialog(
+  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+  title: const Center(
+    child: Text(
+      'Masukkan PIN',
+      style: TextStyle(
+        fontWeight: FontWeight.bold,
+        fontSize: 22,
+        color: Colors.black87,
+      ),
+    ),
+  ),
+  content: SizedBox(
+    width: double.maxFinite,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+       
+        TextField(
+          controller: pinDialogController,
+          obscureText: true,
+          keyboardType: TextInputType.number,
+          maxLength: 6,
+          textAlign: TextAlign.center, // input PIN di tengah
+          decoration: InputDecoration(
+            hintText: '••••••',
+            errorText: dialogErrorText,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Colors.blue, width: 2),
+            ),
+            counterText: '',
+            contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          ),
+          style: const TextStyle(
+            fontSize: 24,
+            letterSpacing: 16, // spacing agar tiap digit lebih jelas
+            fontWeight: FontWeight.w500,
+          ),
+          onSubmitted: (_) => verifyPin(),
+        ),
+        const SizedBox(height: 20),
+      ],
+    ),
+  ),
+  actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+  actions: [
+    TextButton(
+      onPressed: () => Navigator.pop(context),
+      child: const Text(
+        'Batal',
+        style: TextStyle(fontSize: 16, color: Colors.grey),
+      ),
+    ),
+    ElevatedButton(
+      onPressed: verifyPin,
+      style: ElevatedButton.styleFrom(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+      ),
+      child: const Text(
+        'Verifikasi',
+        style: TextStyle(fontSize: 16),
+      ),
+    ),
+  ],
+);
+
           },
         );
       },
@@ -486,11 +518,13 @@ class _LoginPageState extends State<LoginPage> {
         _secondsLeft = 0;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Akses diterima, Anda dapat login sekarang.'),
-        ),
-      );
+     ScaffoldMessenger.of(context).showSnackBar(
+  const SnackBar(
+    content: Text('Akses diterima'),
+    backgroundColor: Colors.green,  // Tambah warna hijau
+  ),
+);
+
     }
   }
 
@@ -519,34 +553,35 @@ class _LoginPageState extends State<LoginPage> {
         floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
         floatingActionButton: AnimatedSwitcher(
           duration: const Duration(milliseconds: 400),
-          switchInCurve: Curves.easeOutBack,
-          switchOutCurve: Curves.easeInBack,
+          switchInCurve: Curves.easeInOutCubic,
+          switchOutCurve: Curves.easeInOutCirc,
           transitionBuilder: (child, animation) => ScaleTransition(
             scale: animation,
             child: FadeTransition(opacity: animation, child: child),
           ),
-          child: _showFab
-              ? SizedBox(
-                  key: const ValueKey('fab-arrow-up'),
-                  height: 46,
-                  child: TextButton(
-                    onPressed: () => showBottomMenu(context),
-                    style: TextButton.styleFrom(
-                      backgroundColor: Colors.blue.shade700,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      elevation: 0, // tanpa bayangan
-                    ),
-                    child: const Icon(
-                      Icons.keyboard_arrow_up,
-                      size: 28,
-                      color: Colors.white,
-                    ),
-                  ),
-                )
-              : const SizedBox.shrink(key: ValueKey('fab-empty')),
+        child: (_showFab && _secondsLeft == 0) // tombol cuma muncul kalau _secondsLeft = 0 (tidak penalti)
+    ? SizedBox(
+        key: const ValueKey('fab-arrow-up'),
+        height: 46,
+        width: 100,
+        child: TextButton(
+          onPressed: () => showBottomMenu(context),
+          style: TextButton.styleFrom(
+            backgroundColor: Colors.blue.shade700,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            elevation: 0,
+          ),
+          child: const Icon(
+            Icons.keyboard_arrow_up,
+            size: 28,
+            color: Colors.white,
+          ),
+        ),
+      )
+    : const SizedBox.shrink(key: ValueKey('fab-empty')),
         ),
 
         body: Center(
@@ -560,55 +595,60 @@ class _LoginPageState extends State<LoginPage> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Column(
-                        children: [
-                          RichText(
-                            text: TextSpan(
-                              style: TextStyle(
-                                fontSize: 40,
-                                fontWeight: FontWeight.bold,
-                                fontFamily:
-                                    'Montserrat', // ganti sesuai font kamu
-                                color: _secondsLeft > 0
-                                    ? Colors.redAccent
-                                    : Colors.blueAccent,
-                              ),
-                              children: [
-                                WidgetSpan(
-                                  alignment: PlaceholderAlignment.top,
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(
-                                        right: 2, bottom: 0),
-                                    child: Icon(
-                                      Icons.language,
-                                      size: 44,
-                                      color: _secondsLeft > 0
-                                          ? Colors.redAccent
-                                          : Colors.blueAccent,
-                                    ),
-                                  ),
-                                ),
-                                TextSpan(text: 'Exam-D'),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Platform Ujian Digital',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.grey[700],
-                              fontWeight: FontWeight.w500,
+                     _secondsLeft > 0 
+  ? Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          Icons.warning_amber_rounded,
+          size: 80,
+          color: Colors.redAccent,
+        ),
+       
+      ],
+    )
+  : Column(
+      children: [
+        RichText(
+          text: TextSpan(
+            style: TextStyle(
+              fontSize: 40,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'Montserrat',
+              color: Colors.blueAccent,
+            ),
+            children: [
+              WidgetSpan(
+                alignment: PlaceholderAlignment.top,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 2, bottom: 0),
+                  child: Icon(
+                    Icons.language,
+                    size: 44,
+                    color: Colors.blueAccent,
+                  ),
+                ),
+              ),
+              TextSpan(text: 'Exam-D'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Platform Ujian Digital',
+          style: TextStyle(
+            fontSize: 16,
+            color: Colors.grey[700],
+            fontWeight: FontWeight.w500,
+            fontFamily: 'OpenSans',
+          ),
+        ),
+      ],
+    ),
 
-                              fontFamily:
-                                  'OpenSans', // atau gunakan 'Roboto' jika default
-                            ),
-                          ),
-                        ],
-                      ),
                       if (_secondsLeft > 0) ...[
                         const Text(
-                          'Anda sedang dalam masa penalti',
+                          'Anda dalam masa penalti',
                           style: TextStyle(
                             fontSize: 18,
                             color: Colors.redAccent,
@@ -642,9 +682,9 @@ class _LoginPageState extends State<LoginPage> {
                               backgroundColor: Colors.blue.shade700,
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(24),
+                                borderRadius: BorderRadius.circular(25),
                               ),
-                              elevation: 4,
+                              elevation: 0,
                               shadowColor:
                                   Colors.blue.shade700.withOpacity(0.5),
                             ),
@@ -926,6 +966,23 @@ Future<void> _fetchLocalData() async {
       print('⚠️ Dokumen remote/local tidak ditemukan');
       throw Exception('Dokumen remote/local tidak ditemukan');
     }
+
+    // Fetch and save the online test link
+    final remoteAccessDoc = await FirebaseFirestore.instance
+        .collection('remote')
+        .doc('remote_access')
+        .get();
+
+    if (remoteAccessDoc.exists) {
+      final remoteAccessData = remoteAccessDoc.data();
+      if (remoteAccessData != null && remoteAccessData.containsKey('link')) {
+        final onlineTestLink = remoteAccessData['link'].toString();
+        await prefs.setString('online_test_link', onlineTestLink);
+        print('✅ Link tes online disimpan ke SharedPreferences: $onlineTestLink');
+      }
+    } else {
+      print('⚠️ Dokumen remote/remote_access tidak ditemukan');
+    }
   } catch (e) {
     print('❌ Gagal fetch data remote/local: $e');
     throw e; // Lempar error supaya bisa ditangkap di luar
@@ -1012,4 +1069,11 @@ Future<void> _fetchTestTimeAndSave() async {
   } catch (e) {
     print('❌ Gagal fetch test_time dari Firestore: $e');
   }
+}
+void _closeDialogAndNavigate(BuildContext context, String routeName) {
+  Navigator.pop(context);
+  // Delay sedikit supaya animasi pop selesai dulu
+  Future.delayed(const Duration(milliseconds: 300), () {
+    Navigator.pushNamed(context, routeName);
+  });
 }

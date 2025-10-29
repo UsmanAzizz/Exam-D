@@ -24,6 +24,7 @@ class RunTest extends StatefulWidget {
 
   @override
   State<RunTest> createState() => _RunTestState();
+  
 }
 
 bool _wifiGracePeriod = false;
@@ -89,6 +90,7 @@ class _RunTestState extends State<RunTest> with WidgetsBindingObserver {
 
   Stream<bool> get pipModeStream =>
       pipEventChannel.receiveBroadcastStream().map((event) => event as bool);
+double _opacity = 0.0;
 
   @override
   void initState() {
@@ -97,6 +99,16 @@ class _RunTestState extends State<RunTest> with WidgetsBindingObserver {
       print('[INIT] test_time: ${prefs.getInt('test_time')}');
     });
     super.initState();
+   
+  Future.delayed(const Duration(milliseconds: 50), () {
+    if (mounted) {
+      setState(() {
+        _opacity = 1.0;
+      });
+    }
+  });
+
+
     _saveTestStartTime();
     _setupLockTaskHandler();
     WidgetsBinding.instance.addObserver(this);
@@ -527,7 +539,18 @@ class _RunTestState extends State<RunTest> with WidgetsBindingObserver {
       );
     } catch (e) {}
   }
+Future<void> checkPinVerified() async {
+    final prefs = await SharedPreferences.getInstance();
+    final pinVerified = prefs.getBool('pin_verified') ?? false;
 
+    print('[checkPinVerified] Pin verified: $pinVerified');
+
+    if (!pinVerified) {
+      if (mounted) {
+        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+      }
+    }
+  }
   Future<void> _confirmExit() async {
     bool canExit = false;
     Timer? timer;
@@ -656,6 +679,7 @@ class _RunTestState extends State<RunTest> with WidgetsBindingObserver {
                                   }
 
                                   Navigator.of(context).pop(true);
+                                   await checkPinVerified();
                                 }
                               : null,
                           style: ButtonStyle(
@@ -716,172 +740,178 @@ class _RunTestState extends State<RunTest> with WidgetsBindingObserver {
     return prefs.getInt('test_time') ?? 10; // default 600 detik (10 menit)
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        // Cek apakah WebView bisa kembali ke halaman sebelumnya
-        final canGoBack = await _controller.canGoBack();
-        if (canGoBack) {
-          _controller.goBack();
-          return false; // Jangan keluar dari halaman
-        }
+    @override
+    Widget build(BuildContext context) {
+      return WillPopScope(
+        onWillPop: () async {
+          // Cek apakah WebView bisa kembali ke halaman sebelumnya
+          final canGoBack = await _controller.canGoBack();
+          if (canGoBack) {
+            _controller.goBack();
+            return false; // Jangan keluar dari halaman
+          }
 
-        return false;
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          automaticallyImplyLeading: false,
-          elevation: 0,
-          backgroundColor: Colors.white,
-          // toolbarHeight: 53,
-          title: Row(
-            children: [
-              Expanded(
-                child: Container(
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  padding: const EdgeInsets.only(left: 12, right: 8),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.language,
-                          color: Colors.blueAccent, size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: (_pageTitle == null || _pageTitle!.isEmpty)
-                            ? const SizedBox.shrink()
-                            : Text(
-                                _pageTitle!,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.black87,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                      ),
-                      Container(width: 8),
-                      IconButton(
-                        icon: const Icon(Icons.refresh,
-                            color: Colors.blueAccent, size: 20),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        onPressed: () async {
-                          try {
-                            final currentUrl = await _controller.currentUrl();
-                            if (!mounted) return;
-                            if (currentUrl != null) {
-                              // Kamu bisa update title di sini juga kalau mau
-                            }
-                            await _controller.reload();
-                          } catch (e) {
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Gagal memuat ulang: $e')),
-                            );
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
+          return false;
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            automaticallyImplyLeading: false,
+            elevation: 0,
+            backgroundColor: Colors.white,
+            // toolbarHeight: 53,
+            title: Row(
+              children: [
+                Expanded(
+                  child: Container(
                     height: 40,
-                    width: 36,
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: Colors.grey[200],
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    padding: EdgeInsets.zero,
-                    margin: const EdgeInsets.only(left: 4),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: PopupMenuButton<int>(
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16)),
-                        icon: const Icon(Icons.more_vert,
-                            color: Colors.black, size: 20),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(minWidth: 36),
-                        onSelected: (value) async {
-                          if (value == 1) {
-                            setState(() {
-                              _isInWifiSettings = true;
-                            });
-                            await WifiSettings.openWifiSettings();
-                          } else if (value == 2) {
-                            _confirmExit();
-                          }
-                        },
-                        itemBuilder: (context) => [
-                          PopupMenuItem(
-                            value: 1,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.wifi,
-                                    color: Colors.blue, size: 20),
-                                const SizedBox(width: 12),
-                                const Expanded(
-                                  child: Text(
-                                    'Pengaturan WiFi',
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.black,
-                                    ),
+                    padding: const EdgeInsets.only(left: 12, right: 8),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.language,
+                            color: Colors.blueAccent, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: (_pageTitle == null || _pageTitle!.isEmpty)
+                              ? const SizedBox.shrink()
+                              : Text(
+                                  _pageTitle!,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black87,
                                   ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                              ],
-                            ),
-                          ),
-                          PopupMenuItem(
-                            value: 2,
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.exit_to_app,
-                                    color: Colors.redAccent, size: 20),
-                                const SizedBox(width: 12),
-                                const Expanded(
-                                  child: Text(
-                                    'Selesai Tes',
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.black,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                        Container(width: 8),
+                        IconButton(
+                          icon: const Icon(Icons.refresh,
+                              color: Colors.blueAccent, size: 20),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () async {
+                            try {
+                              final currentUrl = await _controller.currentUrl();
+                              if (!mounted) return;
+                              if (currentUrl != null) {
+                                // Kamu bisa update title di sini juga kalau mau
+                              }
+                              await _controller.reload();
+                            } catch (e) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('Gagal memuat ulang: $e')),
+                              );
+                            }
+                          },
+                        ),
+                      ],
                     ),
                   ),
-                ],
-              ),
-            ],
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      height: 40,
+                      width: 36,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      padding: EdgeInsets.zero,
+                      margin: const EdgeInsets.only(left: 4),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: PopupMenuButton<int>(
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                          icon: const Icon(Icons.more_vert,
+                              color: Colors.black, size: 20),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 36),
+                          onSelected: (value) async {
+                            if (value == 1) {
+                              setState(() {
+                                _isInWifiSettings = true;
+                              });
+                              await WifiSettings.openWifiSettings();
+                            } else if (value == 2) {
+                              _confirmExit();
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            PopupMenuItem(
+                              value: 1,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.wifi,
+                                      color: Colors.blue, size: 20),
+                                  const SizedBox(width: 12),
+                                  const Expanded(
+                                    child: Text(
+                                      'Pengaturan WiFi',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.black,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 2,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.exit_to_app,
+                                      color: Colors.redAccent, size: 20),
+                                  const SizedBox(width: 12),
+                                  const Expanded(
+                                    child: Text(
+                                      'Selesai Tes',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.black,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ),
         body: SafeArea(
-          child: WebViewWidget(controller: _controller),
+  child: AnimatedOpacity(
+    duration: const Duration(milliseconds: 500),
+    curve: Curves.easeInOut,
+    opacity: _opacity,
+    child: WebViewWidget(controller: _controller),
+  ),
+),
+
         ),
-      ),
-    );
+      );
+    }
   }
-}
 
 class WifiSettings {
   static const MethodChannel _channel = MethodChannel('webdipo/wifi');
