@@ -24,6 +24,9 @@ void main() {
   runApp(const MyApp());
 }
 
+ const MethodChannel _windowModeChannel =
+    MethodChannel('com.example.webdipo/window_mode');
+
 const correctPin = '532563'; // PIN yang harus dimasukkan
 final GlobalKey _fieldKey = GlobalKey();
 final GlobalKey _buttonKey = GlobalKey();
@@ -72,6 +75,8 @@ class SplashDecider extends StatefulWidget {
 }
 
 class _SplashDeciderState extends State<SplashDecider> {
+  Timer? _deviceAdminCheckTimer;
+
   @override
   void initState() {
     super.initState();
@@ -83,19 +88,220 @@ class _SplashDeciderState extends State<SplashDecider> {
 
   Future<void> _checkPinVerified() async {
     final prefs = await SharedPreferences.getInstance();
-   final pinVerified = prefs.getBool('pin_verified') ?? false;
-print('DEBUG: pin_verified = $pinVerified');
-
-if (pinVerified) {
-  if (mounted) {
-    Navigator.pushReplacementNamed(context, '/login');
+       final pinVerified = prefs.getBool('pin_verified') ?? false;
+   print('DEBUG: pin_verified = $pinVerified');
+   
+       // --- Tambahkan pengecekan Device Admin di sini ---
+       final bool isDeviceAdmin = await LockTaskHelper.isDeviceAdminActive();
+       print('DEBUG: isDeviceAdminActive = $isDeviceAdmin'); // <-- Tambahkan log ini
+   
+       if (!isDeviceAdmin) {
+      print('DEBUG: Device Admin belum aktif. Membuka pengaturan...');
+      await _windowModeChannel.invokeMethod('openLockTaskSettings');
+      _startDeviceAdminMonitoring(); // <-- Pindahkan pemanggilan ke sini
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            print('DEBUG: Menampilkan dialog peringatan Device Admin.');
+            return AlertDialog(
+              title: const Text('Peringatan'),
+              content: const Text('Untuk mengaktifkan mode ujian aman, aplikasi memerlukan izin Device Admin. Mohon aktifkan izin tersebut.'),
+              actions: <Widget>[
+                TextButton(
+                  child: const Text('OK'),
+                  onPressed: () {
+                    Navigator.of(context).pop(); // Tutup dialog
+                    // Pemantauan sudah dimulai di luar dialog
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      }
+      print('DEBUG: _checkPinVerified() berhenti karena Device Admin belum aktif.');
+      return;
+       }
+   
+                      print('DEBUG: Device Admin sudah aktif. Melanjutkan ke login.'); // <-- Tambahkan log ini
+           
+                      // Setelah Device Admin aktif, navigasi ke LoginPage
+                      if (mounted) {
+                        Navigator.pushReplacementNamed(context, '/login');
+                      }
   }
-} else {
-  if (mounted) {
-    Navigator.pushReplacementNamed(context, '/config');
+
+  Future<void> _fetchLocalData() async {
+  try {
+    // Cek koneksi internet langsung di sini
+    var connectivityResult = await Connectivity().checkConnectivity();
+    if (connectivityResult != ConnectivityResult.mobile &&
+        connectivityResult != ConnectivityResult.wifi) {
+      throw Exception('Tidak ada koneksi internet');
+    }
+
+    await Firebase.initializeApp();
+
+    final prefs = await SharedPreferences.getInstance();
+
+    final localDoc = await FirebaseFirestore.instance
+        .collection('remote')
+        .doc('local')
+        .get();
+
+    // Fetch online_test_link from remote/remote_access
+    final remoteAccessDoc = await FirebaseFirestore.instance
+        .collection('remote')
+        .doc('remote_access')
+        .get();
+
+    if (remoteAccessDoc.exists) {
+      final remoteAccessData = remoteAccessDoc.data();
+      if (remoteAccessData != null && remoteAccessData.containsKey('link')) {
+        final onlineTestLink = remoteAccessData['link'].toString();
+        await prefs.setString('online_test_link', onlineTestLink);
+        print('✅ online_test_link dari remote/remote_access disimpan: $onlineTestLink');
+      } else {
+        print('⚠️ Link ujian online tidak ditemukan di remote/remote_access');
+      }
+    } else {
+      print('⚠️ Dokumen remote/remote_access tidak ditemukan');
+    }
+
+    if (localDoc.metadata.isFromCache) {
+      throw Exception(
+          'Data hanya dari cache, kemungkinan tidak ada koneksi internet');
+    }
+
+    if (localDoc.exists) {
+      final localData = localDoc.data();
+      if (localData != null) {
+        print('📦 Data di remote/local:');
+        localData.forEach((key, value) {
+          print(' - $key : $value');
+        });
+
+        final localDataString = json.encode(localData);
+        await prefs.setString('local_data', localDataString);
+        print('✅ Data local dari remote/local disimpan ke SharedPreferences');
+
+        if (localData.containsKey('local_setting')) {
+          final localSetting = localData['local_setting'].toString();
+          await prefs.setString('local_setting', localSetting);
+          print('✅ local_setting dari local disimpan: $localSetting');
+        }
+      }
+    } else {
+      print('⚠️ Dokumen remote/local tidak ditemukan');
+      throw Exception('Dokumen remote/local tidak ditemukan');
+    }
+  } catch (e) {
+    print('❌ Gagal fetch data remote/local: $e');
+    throw e; // Lempar error supaya bisa ditangkap di luar
   }
 }
 
+Future<void> _fetchPenaltyDurationFromFirestore() async {
+  try {
+    await Firebase.initializeApp();
+
+    final docSnap = await FirebaseFirestore.instance
+        .collection('remote')
+        .doc('global')
+        .get();
+
+    if (docSnap.exists) {
+      final data = docSnap.data();
+      if (data != null && data.containsKey('int_penalty')) {
+        final dynamic penaltyValue = data['int_penalty'];
+        int penaltyInt;
+
+        if (penaltyValue is int) {
+          penaltyInt = penaltyValue;
+        } else if (penaltyValue is String) {
+          penaltyInt = int.tryParse(penaltyValue) ?? 1800; // default 1800 detik
+        } else {
+          penaltyInt = 1800;
+        }
+
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('int_penalty', penaltyInt);
+        print('✅ int_penalty disimpan ke SharedPreferences: $penaltyInt');
+      } else {
+        print('⚠️ int_penalty tidak ditemukan di dokumen remote/global');
+      }
+    } else {
+      print('⚠️ Dokumen global di koleksi remote tidak ada');
+    }
+  } catch (e) {
+    print('❌ Gagal fetch int_penalty dari Firestore: $e');
+  }
+}
+
+Future<void> _fetchTestTimeAndSave() async {
+  try {
+    // Cek apakah Firebase sudah diinisialisasi
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp();
+      print('Firebase berhasil diinisialisasi');
+    }
+
+    // Ambil dokumen 'global' dari koleksi 'remote'
+    final docSnap = await FirebaseFirestore.instance
+        .collection('remote')
+        .doc('global')
+        .get();
+
+    if (docSnap.exists) {
+      final data = docSnap.data();
+      int testTimeInt = 0; // default kalau data tidak ada
+
+      if (data != null && data.containsKey('test_time')) {
+        final dynamic testTimeValue = data['test_time'];
+
+        if (testTimeValue is int) {
+          testTimeInt = testTimeValue;
+        } else if (testTimeValue is String) {
+          testTimeInt = int.tryParse(testTimeValue) ?? 0;
+        } else {
+          print('⚠️ Tipe data test_time tidak dikenali, gunakan default 0');
+        }
+      } else {
+        print(
+            '⚠️ test_time tidak ditemukan di dokumen remote/global, simpan default 0');
+      }
+
+      // Simpan nilai testTimeInt ke SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('test_time', testTimeInt);
+      print('✅ test_time disimpan ke SharedPreferences: $testTimeInt');
+    } else {
+      print('⚠️ Dokumen global di koleksi remote tidak ada');
+    }
+  } catch (e) {
+    print('❌ Gagal fetch test_time dari Firestore: $e');
+  }
+}
+
+  void _startDeviceAdminMonitoring() {
+    _deviceAdminCheckTimer?.cancel(); // Pastikan tidak ada timer yang berjalan
+    _deviceAdminCheckTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+      final bool isDeviceAdmin = await LockTaskHelper.isDeviceAdminActive();
+      print('DEBUG: Memantau Device Admin - isDeviceAdminActive = $isDeviceAdmin');
+
+      if (isDeviceAdmin) {
+        timer.cancel(); // Hentikan timer
+        _checkPinVerified(); // Panggil ulang untuk melanjutkan alur aplikasi
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _deviceAdminCheckTimer?.cancel(); // Batalkan timer saat widget dibuang
+    super.dispose();
   }
 
   @override
@@ -132,12 +338,12 @@ class _LoginPageState extends State<LoginPage> {
   // Tambahkan method baru untuk memuat IP yang tersimpan
   Future<void> _loadSavedIp() async {
     final prefs = await SharedPreferences.getInstance();
-    final String? savedIp = prefs.getString('last_ip');
+    final String? lastEnteredKey = prefs.getString('last_entered_key');
 
-    if (savedIp != null && savedIp.isNotEmpty) {
+    if (lastEnteredKey != null && lastEnteredKey.isNotEmpty) {
       if (mounted) {
         setState(() {
-          _ipController.text = savedIp;
+          _ipController.text = lastEnteredKey;
         });
       }
     }
@@ -393,21 +599,30 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _login() async {
-    String ip = _ipController.text.trim();
+    String enteredKey = _ipController.text.trim();
 
-    if (ip.isNotEmpty) {
+    if (enteredKey.isNotEmpty) {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('last_ip', ip); // Simpan IP
+      // Use the entered key to retrieve the actual IP address from SharedPreferences
+      final String? ipAddress = prefs.getString(enteredKey);
 
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => RunTest(ipAddress: ip),
-        ),
-      );
+      if (ipAddress != null && ipAddress.isNotEmpty) {
+        await prefs.setString('last_entered_key', enteredKey); // Simpan key yang dimasukkan
+
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => RemoteAccess(), // Navigate to RemoteAccess
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Kunci "$enteredKey" tidak ditemukan atau alamat ujian kosong.')),
+        );
+      }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Alamat IP tidak boleh kosong')),
+        const SnackBar(content: Text('Kunci tidak boleh kosong')), // Ubah pesan error
       );
     }
   }
@@ -735,7 +950,7 @@ class _LoginPageState extends State<LoginPage> {
                                     keyboardType: TextInputType.url,
                                     textAlign: TextAlign.left,
                                     decoration: InputDecoration(
-                                      labelText: 'Masukan alamat Ujian',
+                                      labelText: 'Masukkan key Ujian',
                                       labelStyle:
                                           TextStyle(color: Colors.grey[700]),
                                       filled: true,
@@ -764,9 +979,23 @@ class _LoginPageState extends State<LoginPage> {
                                           splashColor: Colors.blue.shade300,
                                           onTap: _login,
                                           child: const Padding(
-                                            padding: EdgeInsets.all(8.0),
-                                            child: Icon(Icons.arrow_forward,
-                                                color: Colors.white),
+                                            padding: EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                Text(
+                                                  'Start </>',
+                                                  style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontSize: 16,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                                // SizedBox(width: 4),
+                                                // Icon(Icons.arrow_forward,
+                                                //     color: Colors.white),
+                                              ],
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -939,6 +1168,25 @@ Future<void> _fetchLocalData() async {
         .doc('local')
         .get();
 
+    // Fetch online_test_link from remote/remote_access
+    final remoteAccessDoc = await FirebaseFirestore.instance
+        .collection('remote')
+        .doc('remote_access')
+        .get();
+
+    if (remoteAccessDoc.exists) {
+      final remoteAccessData = remoteAccessDoc.data();
+      if (remoteAccessData != null && remoteAccessData.containsKey('link')) {
+        final onlineTestLink = remoteAccessData['link'].toString();
+        await prefs.setString('online_test_link', onlineTestLink);
+        print('✅ online_test_link dari remote/remote_access disimpan: $onlineTestLink');
+      } else {
+        print('⚠️ Link ujian online tidak ditemukan di remote/remote_access');
+      }
+    } else {
+      print('⚠️ Dokumen remote/remote_access tidak ditemukan');
+    }
+
     if (localDoc.metadata.isFromCache) {
       throw Exception(
           'Data hanya dari cache, kemungkinan tidak ada koneksi internet');
@@ -965,23 +1213,6 @@ Future<void> _fetchLocalData() async {
     } else {
       print('⚠️ Dokumen remote/local tidak ditemukan');
       throw Exception('Dokumen remote/local tidak ditemukan');
-    }
-
-    // Fetch and save the online test link
-    final remoteAccessDoc = await FirebaseFirestore.instance
-        .collection('remote')
-        .doc('remote_access')
-        .get();
-
-    if (remoteAccessDoc.exists) {
-      final remoteAccessData = remoteAccessDoc.data();
-      if (remoteAccessData != null && remoteAccessData.containsKey('link')) {
-        final onlineTestLink = remoteAccessData['link'].toString();
-        await prefs.setString('online_test_link', onlineTestLink);
-        print('✅ Link tes online disimpan ke SharedPreferences: $onlineTestLink');
-      }
-    } else {
-      print('⚠️ Dokumen remote/remote_access tidak ditemukan');
     }
   } catch (e) {
     print('❌ Gagal fetch data remote/local: $e');
@@ -1071,9 +1302,11 @@ Future<void> _fetchTestTimeAndSave() async {
   }
 }
 void _closeDialogAndNavigate(BuildContext context, String routeName) {
+  print('[main] _closeDialogAndNavigate: Popping current route.');
   Navigator.pop(context);
   // Delay sedikit supaya animasi pop selesai dulu
   Future.delayed(const Duration(milliseconds: 300), () {
+    print('[main] _closeDialogAndNavigate: Pushing route: $routeName');
     Navigator.pushNamed(context, routeName);
   });
 }

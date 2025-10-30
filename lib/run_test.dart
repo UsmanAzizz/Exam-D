@@ -135,13 +135,6 @@ double _opacity = 0.0;
         }
         return;
       }
-
-      bool started = await LockTaskHelper.startLockTask();
-      if (!started) {
-        print('[Flutter] Gagal masuk lock task mode');
-      } else {
-        print('[Flutter] Lock task mode dimulai');
-      }
     });
 
     _ipFocusNode.addListener(() async {
@@ -229,25 +222,33 @@ double _opacity = 0.0;
     _ipController.text = widget.ipAddress;
   }
 
+
+
   void _setupLockTaskHandler() {
     _windowModeChannel.setMethodCallHandler((call) async {
       print('[Flutter] method call: ${call.method}');
       if (call.method == 'onLockTaskEnded') {
         print('[Flutter] ❌ Lock Task Mode dinonaktifkan!');
-        if (!_alreadyNavigated && mounted) {
-          // Contoh: cek status user login dulu
-          final isUserLoggedIn =
-              await checkUserLoginStatus(); // buat fungsi cek login kamu
+        // Reset _isPinningInProgress here if it's true, as pinning has failed
+        if (mounted) {
+          setState(() {
+            print('[Flutter] _isPinningInProgress reset to false because lock task ended');
+          });
+        }
+        print('[Flutter] _alreadyNavigated: $_alreadyNavigated');
+        final isUserLoggedIn = await checkUserLoginStatus();
+        print('[Flutter] isUserLoggedIn: $isUserLoggedIn');
 
-          if (isUserLoggedIn) {
-            print('User masih login, tidak navigasi ke login');
-            // Atau kamu bisa navigasi ke halaman lain sesuai kebutuhan
-          } else {
-            setState(() {
-              _alreadyNavigated = true;
-            });
-            Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
-          }
+        if (!_alreadyNavigated && !isUserLoggedIn) {
+          print('[Flutter] Navigating to /login due to onLockTaskEnded and user not logged in.');
+          setState(() {
+            _alreadyNavigated = true;
+          });
+          Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+        } else if (_alreadyNavigated) {
+          print('[Flutter] Already navigated, skipping further navigation.');
+        } else if (isUserLoggedIn) {
+          print('[Flutter] User is logged in, skipping navigation to /login.');
         }
       }
     });
@@ -949,6 +950,26 @@ class LockTaskHelper {
       return result;
     } catch (e) {
       print('Error stopping lock task: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> checkLockTask() async {
+    try {
+      final bool result = await _channel.invokeMethod('checkLockTask');
+      return result;
+    } catch (e) {
+      print('Error checking lock task: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> isDeviceAdminActive() async {
+    try {
+      final bool result = await _channel.invokeMethod('isDeviceAdminActive');
+      return result;
+    } on PlatformException catch (e) {
+      print('Error checking device admin status: ${e.message}');
       return false;
     }
   }

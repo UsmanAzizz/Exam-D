@@ -13,6 +13,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
@@ -44,6 +45,8 @@ class MainActivity : FlutterActivity() {
     private var pipEventSink: EventChannel.EventSink? = null
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var isLockTaskPending = false // Re-introduce flag
+    private var _isLockTaskInitiated = false // Re-introduce flag
 
     private val CHANNEL_ID = "window_mode_channel"
     private val NOTIFICATION_ID = 1001
@@ -125,89 +128,106 @@ class MainActivity : FlutterActivity() {
         }
 
         // Method channel window mode
-                windowModeMethodChannel.setMethodCallHandler { call, result ->
-            when (call.method) {
-                "isInMultiWindowMode" -> {
-                    val isMulti = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                        isInMultiWindowMode
-                    } else {
-                        false
-                    }
-                    Log.d("MainActivity", "Native: isInMultiWindowMode -> $isMulti")
-                    result.success(isMulti)
-                }
+             windowModeMethodChannel.setMethodCallHandler { call, result ->
+    when (call.method) {
 
-                "isInFloatingWindow" -> {
-                    val isFloating = checkIfInFloatingWindowMode()
-                    Log.d("MainActivity", "Native: isInFloatingWindow -> $isFloating")
-                    result.success(isFloating)
-                }
-
-                "enterPictureInPictureMode" -> {
-                    val entered = enterPiPMode()
-                    result.success(entered)
-                }
-
-                "startLockTask" -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                        try {
-                            Log.d("MainActivity", "Starting Lock Task Mode")
-                            startLockTask()
-                            result.success(true)
-                        } catch (e: Exception) {
-                            Log.e("MainActivity", "Failed to start Lock Task Mode", e)
-                            result.error(
-                                "LOCKTASK_FAILED",
-                                "Failed to start Lock Task Mode: ${e.message}",
-                                null
-                            )
-                        }
-                    } else {
-                        result.success(false)
-                    }
-                }
-
-                "stopLockTask" -> {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                        try {
-                            Log.d("MainActivity", "Stopping Lock Task Mode")
-                            stopLockTask()
-                            result.success(true)
-                        } catch (e: Exception) {
-                            Log.e("MainActivity", "Failed to stop Lock Task Mode", e)
-                            result.error(
-                                "LOCKTASK_FAILED",
-                                "Failed to stop Lock Task Mode: ${e.message}",
-                                null
-                            )
-                        }
-                    } else {
-                        result.success(false)
-                    }
-                }
-
-                "openLockTaskSettings" -> {
-                    try {
-                        val componentName =
-                            ComponentName(this@MainActivity, MyDeviceAdminReceiver::class.java)
-                        val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
-                            putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, componentName)
-                            putExtra(
-                                DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-                                "Aktifkan agar aplikasi dapat menggunakan Lock Task Mode."
-                            )
-                        }
-                        startActivity(intent)
-                        result.success(null)
-                    } catch (e: Exception) {
-                        Log.e("MainActivity", "Failed to open Lock Task settings", e)
-                        result.error("ERROR", "Gagal membuka pengaturan Lock Task: ${e.message}", null)
-                    }
-                }
-
-                else -> result.notImplemented()
-            }
+        "isInMultiWindowMode" -> {
+            val isMulti = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                isInMultiWindowMode
+            } else false
+            Log.d("MainActivity", "isInMultiWindowMode -> $isMulti")
+            result.success(isMulti)
         }
+
+        "isInFloatingWindow" -> {
+            val isFloating = checkIfInFloatingWindowMode()
+            Log.d("MainActivity", "isInFloatingWindow -> $isFloating")
+            result.success(isFloating)
+        }
+
+        "enterPictureInPictureMode" -> {
+            val entered = enterPiPMode()
+            result.success(entered)
+        }
+
+                        "startLockTask" -> {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                                try {
+                                    Log.d("MainActivity", "Attempting to start Lock Task Mode")
+                                    isLockTaskPending = true
+                            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+                                                                val componentName = ComponentName(this@MainActivity, MyDeviceAdminReceiver::class.java)
+                            
+                                                                // --- Tambahkan log ini ---
+                                                                val isDeviceOwner = dpm.isDeviceOwnerApp(packageName)
+                                                                Log.d("MainActivity", "Is app Device Owner? $isDeviceOwner")
+                                                                // --- Akhir log ---
+                            
+                                                                if (hasWindowFocus()) {
+                                                                    startLockTask()
+                                                                    Log.d("MainActivity", "Lock Task started immediately")
+                                                                    // Callback ke Flutter
+                                                                    windowModeMethodChannel.invokeMethod("onLockTaskStarted", true)
+                                                                } else {
+                                                                    Log.d("MainActivity", "Waiting for window focus to start Lock Task")
+                                                                }        
+                                    result.success(true)
+                                } catch (e: Exception) {
+                                    Log.e("MainActivity", "Failed to start Lock Task Mode", e)
+                                    windowModeMethodChannel.invokeMethod("onLockTaskError", e.message)
+                                    result.error("LOCKTASK_FAILED", e.message, null)
+                                }
+                            } else result.success(false)
+                        }
+        "stopLockTask" -> {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                try {
+                    Log.d("MainActivity", "Stopping Lock Task Mode")
+                    stopLockTask()
+                    // Callback ke Flutter
+                    windowModeMethodChannel.invokeMethod("onLockTaskStopped", true)
+                    result.success(true)
+                } catch (e: Exception) {
+                    Log.e("MainActivity", "Failed to stop Lock Task Mode", e)
+                    windowModeMethodChannel.invokeMethod("onLockTaskError", e.message)
+                    result.error("LOCKTASK_FAILED", "Failed to stop Lock Task Mode: ${e.message}", null)
+                }
+            } else result.success(false)
+        }
+
+                        "openLockTaskSettings" -> {
+                            try {
+                                val componentName = ComponentName(this@MainActivity, MyDeviceAdminReceiver::class.java)
+                                val intent = Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+                                    putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, componentName)
+                                    putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                                        "Aktifkan agar aplikasi dapat menggunakan Lock Task Mode.")
+                                }
+                                startActivity(intent)
+                                result.success(null)
+                            } catch (e: Exception) {
+                                Log.e("MainActivity", "Failed to open Lock Task settings", e)
+                                windowModeMethodChannel.invokeMethod("onLockTaskError", e.message)
+                                result.error("ERROR", "Gagal membuka pengaturan Lock Task: ${e.message}", null)
+                            }
+                        }
+        
+                                        "checkLockTask" -> {
+                                            val isLocked = isLockTaskActive()
+                                            Log.d("MainActivity", "checkLockTask -> $isLocked")
+                                            result.success(isLocked)
+                                        }
+                        
+                                        "isDeviceAdminActive" -> {
+                                            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+                                            val componentName = ComponentName(this@MainActivity, MyDeviceAdminReceiver::class.java)
+                                            val isActive = dpm.isAdminActive(componentName)
+                                            Log.d("MainActivity", "isDeviceAdminActive -> $isActive")
+                                            result.success(isActive)
+                                        }        else -> result.notImplemented()
+    }
+}
+
 
         MyAccessibilityService.methodChannel = accessibilityMethodChannel
 
@@ -417,23 +437,53 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun isLockTaskActive(): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            return activityManager.lockTaskModeState != ActivityManager.LOCK_TASK_MODE_NONE
+        }
+        return false
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         unregisterReceiver(wifiBroadcastReceiver)
     }
 
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
+
+private var isLockTaskInitiated = false
+
+override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    Log.d("MainActivity", "onCreate: isLockTaskInitiated = $isLockTaskInitiated")
+}
+
+        override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
+        Log.d("MainActivity", "onWindowFocusChanged: hasFocus=$hasFocus, isLockTaskPending=$isLockTaskPending, _isLockTaskInitiated=$_isLockTaskInitiated")
 
-        if (hasFocus) {
-            val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                if (!activityManager.lockTaskModeState.equals(ActivityManager.LOCK_TASK_MODE_LOCKED)) {
-                    // Lock Task Mode tidak aktif
-                    Log.d("MainActivity", "Lock Task Mode OFF")
+        if (!hasFocus) return
 
-                    // Kirim ke Flutter
-                    windowModeMethodChannel.invokeMethod("onLockTaskEnded", null)
+        val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val currentLockTaskMode = activityManager.lockTaskModeState
+
+            if (isLockTaskPending) {
+                // Sedang menunggu lock task mode
+                if (currentLockTaskMode == ActivityManager.LOCK_TASK_MODE_LOCKED) {
+                    Log.d("MainActivity", "Lock Task Mode successfully entered")
+                    isLockTaskPending = false
+                    windowModeMethodChannel.invokeMethod("onLockTaskActivated", null)
+                } else if (currentLockTaskMode == ActivityManager.LOCK_TASK_MODE_NONE) {
+                    Log.d("MainActivity", "Lock Task Mode failed (user declined)")
+                    isLockTaskPending = false
+                    windowModeMethodChannel.invokeMethod("onLockTaskEnded", "User declined Lock Task Mode")
+                }
+            } else {
+                // Deteksi jika Lock Task berakhir tiba-tiba
+                if (_isLockTaskInitiated && currentLockTaskMode == ActivityManager.LOCK_TASK_MODE_NONE) {
+                    Log.d("MainActivity", "Lock Task Mode OFF unexpectedly")
+                    windowModeMethodChannel.invokeMethod("onLockTaskEnded", "Lock Task Mode exited unexpectedly")
                 }
             }
         }
