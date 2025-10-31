@@ -1,35 +1,62 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io'; // untuk SocketException
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:webdipo/AdinPage.dart';
 import 'package:webdipo/localserver.dart';
 import 'run_test.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'remote.dart'; // Import halaman baru
 import 'fetch_config.dart';
 import 'package:flutter_speed_dial/flutter_speed_dial.dart';
-import 'dart:io'; // untuk SocketException
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   SystemChrome.setSystemUIOverlayStyle(
     SystemUiOverlayStyle.light.copyWith(
       statusBarColor: Colors.transparent,
     ),
   );
 
+  // Inisialisasi PIN dari SharedPreferences sebelum runApp
+  await initPin();
+
   runApp(const MyApp());
 }
 
- const MethodChannel _windowModeChannel =
+const MethodChannel _windowModeChannel =
     MethodChannel('com.example.webdipo/window_mode');
 
-const correctPin = '532563'; // PIN yang harus dimasukkan
+// Late final untuk PIN, diinisialisasi saat app start
+late final String correctPin;
+
+// Inisialisasi PIN dari SharedPreferences
+Future<void> initPin() async {
+  final prefs = await SharedPreferences.getInstance();
+  correctPin = prefs.getString('PIN') ?? '123456'; // default PIN
+}
+
+// Fungsi sinkron untuk cek PIN
+bool checkPin(String inputPin) {
+  final isCorrect = inputPin == correctPin;
+  if (isCorrect) {
+    print('✅ PIN benar');
+  } else {
+    print('❌ PIN salah');
+  }
+  return isCorrect;
+}
+
+// PIN yang harus dimasukkan
 final GlobalKey _fieldKey = GlobalKey();
 final GlobalKey _buttonKey = GlobalKey();
+
+// Format durasi menjadi menit dan detik
 String _formatDuration(int totalSeconds) {
   final minutes = totalSeconds ~/ 60;
   final seconds = totalSeconds % 60;
@@ -87,50 +114,101 @@ class _SplashDeciderState extends State<SplashDecider> {
   }
 
   Future<void> _checkPinVerified() async {
-    final prefs = await SharedPreferences.getInstance();
-       final pinVerified = prefs.getBool('pin_verified') ?? false;
-   print('DEBUG: pin_verified = $pinVerified');
-   
-       // --- Tambahkan pengecekan Device Admin di sini ---
-       final bool isDeviceAdmin = await LockTaskHelper.isDeviceAdminActive();
-       print('DEBUG: isDeviceAdminActive = $isDeviceAdmin'); // <-- Tambahkan log ini
-   
-       if (!isDeviceAdmin) {
-      print('DEBUG: Device Admin belum aktif. Membuka pengaturan...');
-      await _windowModeChannel.invokeMethod('openLockTaskSettings');
-      _startDeviceAdminMonitoring(); // <-- Pindahkan pemanggilan ke sini
-      if (mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (BuildContext context) {
-            print('DEBUG: Menampilkan dialog peringatan Device Admin.');
-            return AlertDialog(
-              title: const Text('Peringatan'),
-              content: const Text('Untuk mengaktifkan mode ujian aman, aplikasi memerlukan izin Device Admin. Mohon aktifkan izin tersebut.'),
-              actions: <Widget>[
-                TextButton(
-                  child: const Text('OK'),
-                  onPressed: () {
-                    Navigator.of(context).pop(); // Tutup dialog
-                    // Pemantauan sudah dimulai di luar dialog
-                  },
-                ),
-              ],
-            );
-          },
-        );
-      }
-      print('DEBUG: _checkPinVerified() berhenti karena Device Admin belum aktif.');
-      return;
-       }
-   
-                      print('DEBUG: Device Admin sudah aktif. Melanjutkan ke login.'); // <-- Tambahkan log ini
-           
-                      // Setelah Device Admin aktif, navigasi ke LoginPage
-                      if (mounted) {
-                        Navigator.pushReplacementNamed(context, '/login');
-                      }
+  final prefs = await SharedPreferences.getInstance();
+
+  final bool isDeviceAdmin = await LockTaskHelper.isDeviceAdminActive();
+  print('DEBUG: isDeviceAdminActive = $isDeviceAdmin');
+
+  if (!isDeviceAdmin) {
+    print('DEBUG: Device Admin belum aktif. Membuka pengaturan...');
+    await _windowModeChannel.invokeMethod('openLockTaskSettings');
+    _startDeviceAdminMonitoring();
+
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          print('DEBUG: Menampilkan dialog peringatan Device Admin.');
+          return Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.security_rounded,
+                    color: Colors.deepPurple,
+                    size: 64,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Izin Diperlukan',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Untuk mengaktifkan mode ujian aman, aplikasi memerlukan izin Device Admin. '
+                    'Mohon aktifkan izin tersebut di pengaturan agar aplikasi dapat berfungsi dengan benar.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: Colors.black54,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    onPressed: () async {
+                      Navigator.of(context).pop();
+                        await _windowModeChannel.invokeMethod('openLockTaskSettings');
+                    },
+                    icon: const Icon(Icons.settings_rounded),
+                    label: const Text('Buka Pengaturan'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    }
+
+    print('DEBUG: _checkPinVerified() berhenti karena Device Admin belum aktif.');
+    return;
+  }
+
+
+    print('DEBUG: Device Admin sudah aktif. Mengunduh konfigurasi dan melanjutkan ke login.'); // <-- Tambahkan log ini
+
+    // Unduh konfigurasi
+    await _fetchLocalData();
+    await _fetchPenaltyDurationFromFirestore();
+    await _fetchTestTimeAndSave();
+
+    // Setelah Device Admin aktif dan konfigurasi diunduh, navigasi ke LoginPage
+    if (mounted) {
+      Navigator.pushReplacementNamed(context, '/login');
+    }
   }
 
   Future<void> _fetchLocalData() async {
@@ -166,8 +244,6 @@ class _SplashDeciderState extends State<SplashDecider> {
       } else {
         print('⚠️ Link ujian online tidak ditemukan di remote/remote_access');
       }
-    } else {
-      print('⚠️ Dokumen remote/remote_access tidak ditemukan');
     }
 
     if (localDoc.metadata.isFromCache) {
@@ -192,6 +268,7 @@ class _SplashDeciderState extends State<SplashDecider> {
           await prefs.setString('local_setting', localSetting);
           print('✅ local_setting dari local disimpan: $localSetting');
         }
+
       }
     } else {
       print('⚠️ Dokumen remote/local tidak ditemukan');
@@ -225,10 +302,22 @@ Future<void> _fetchPenaltyDurationFromFirestore() async {
         } else {
           penaltyInt = 1800;
         }
-
+        
         final prefs = await SharedPreferences.getInstance();
         await prefs.setInt('int_penalty', penaltyInt);
         print('✅ int_penalty disimpan ke SharedPreferences: $penaltyInt');
+
+        // --- LOG local_data ---
+        final localDataString = prefs.getString('local_data') ?? '{}';
+        Map<String, dynamic> localData = {};
+        try {
+          localData = Map<String, dynamic>.from(jsonDecode(localDataString));
+        } catch (e) {
+          print('⚠️ Gagal decode local_data: $e');
+        }
+        print('📦 [LOG] local_data saat ini:');
+        localData.forEach((key, value) => print(' - $key : $value'));
+        // --- END LOG ---
       } else {
         print('⚠️ int_penalty tidak ditemukan di dokumen remote/global');
       }
@@ -239,6 +328,7 @@ Future<void> _fetchPenaltyDurationFromFirestore() async {
     print('❌ Gagal fetch int_penalty dari Firestore: $e');
   }
 }
+
 
 Future<void> _fetchTestTimeAndSave() async {
   try {
@@ -363,7 +453,7 @@ class _LoginPageState extends State<LoginPage> {
             borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
             color: Colors.white,
             child: Container(
-              height: 320,
+              height: 300,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -423,19 +513,38 @@ class _LoginPageState extends State<LoginPage> {
 
                         print('Status perubahan data: $adaPerubahan');
 
-                        ScaffoldMessenger.of(navigatorKey.currentContext!)
-                            .showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              adaPerubahan
-                                  ? 'Konfigurasi berhasil diperbarui'
-                                  : 'Tidak ada perubahan data',
-                            ),
-                            backgroundColor: adaPerubahan
-                                ? Colors.green
-                                : Colors.yellow.shade700,
-                          ),
-                        );
+                       ScaffoldMessenger.of(navigatorKey.currentContext!).hideCurrentSnackBar();
+ScaffoldMessenger.of(navigatorKey.currentContext!).showSnackBar(
+  SnackBar(
+    behavior: SnackBarBehavior.floating, // mengambang
+    margin: const EdgeInsets.fromLTRB(16, 16, 16, 650), // muncul di atas halaman
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+    backgroundColor: adaPerubahan ? Colors.green.shade600 : Colors.orange.shade700,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    elevation: 6,
+    content: Row(
+      children: [
+        Icon(
+          adaPerubahan ? Icons.check_circle_outline : Icons.info_outline,
+          color: Colors.white,
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            adaPerubahan
+                ? 'Konfigurasi berhasil diperbarui'
+                : 'Tidak ada perubahan data',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    ),
+  ),
+);
+
 
                         // Hapus Navigator.pop supaya drawer tidak ditutup di sini
                       } catch (e) {
@@ -458,19 +567,183 @@ class _LoginPageState extends State<LoginPage> {
                     },
                   ),
 
-                  _buildMenuItem(
-                    icon: Icons.cloud_outlined,
-                    title: 'Test Online',
-                    color: Colors.blue.shade600,
-                   onTap: () => _closeDialogAndNavigate(context, '/remoteaccess'),
- ),
-                  _buildMenuItem(
-                    icon: Icons.sd_storage,
-                    title: 'Server Lokal',
-                    color: Colors.orange.shade600,
-                    onTap: () => Navigator.pushNamed(context, '/localserver'),
-                  ),
-                  _buildMenuItem(
+//                   _buildMenuItem(
+//                     icon: Icons.cloud_outlined,
+//                     title: 'Test Online',
+//                     color: Colors.blue.shade600,
+//                    onTap: () => _closeDialogAndNavigate(context, '/remoteaccess'),
+//  ),
+//                   _buildMenuItem(
+//                     icon: Icons.sd_storage,
+//                     title: 'Server Lokal',
+//                     color: Colors.orange.shade600,
+//                     onTap: () => Navigator.pushNamed(context, '/localserver'),
+//                   ),
+      
+           _buildMenuItem(
+  icon: Icons.admin_panel_settings,
+  title: 'Administrator',
+  color: Colors.blue.shade600,
+  onTap: () async {
+    if (Navigator.canPop(navigatorKey.currentContext!)) {
+      Navigator.pop(navigatorKey.currentContext!);
+    }
+
+    final pinController = TextEditingController();
+    bool pinCorrect = false;
+
+    pinCorrect = await showDialog<bool>(
+      context: navigatorKey.currentContext!,
+      barrierDismissible: false,
+      builder: (context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+  mainAxisSize: MainAxisSize.min,
+  crossAxisAlignment: CrossAxisAlignment.center,
+  children: [
+    Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+          color: Colors.blue.shade50,
+        shape: BoxShape.circle,
+      ),
+      child: Icon(
+        Icons.admin_panel_settings_rounded,
+          color: Colors.blue.shade600,
+        size: 48,
+      ),
+    ),
+    const SizedBox(height: 20),
+    const Text(
+      'Masukkan PIN Administrator',
+      style: TextStyle(
+        fontSize: 20,
+        fontWeight: FontWeight.w700,
+      ),
+      textAlign: TextAlign.center,
+    ),
+    const SizedBox(height: 16),
+    TextField(
+      controller: pinController,
+      obscureText: true,
+      keyboardType: TextInputType.number,
+      maxLength: 6,
+      textAlign: TextAlign.center,
+      style: const TextStyle(
+        letterSpacing: 4,
+        fontSize: 22,
+        fontWeight: FontWeight.w600,
+      ),
+      decoration: InputDecoration(
+        counterText: '',
+        hintText: '••••••',
+        hintStyle: TextStyle(
+          color: Colors.grey.shade400,
+          fontSize: 22,
+          letterSpacing: 4,
+        ),
+        filled: true,
+        fillColor: Colors.grey.shade100,
+        contentPadding: const EdgeInsets.symmetric(vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+      ),
+    ),
+    const SizedBox(height: 24),
+    Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        TextButton.icon(
+          icon: const Icon(Icons.close_rounded),
+          label: const Text('Batal'),
+          style: TextButton.styleFrom(
+            foregroundColor: Colors.grey.shade700,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          ),
+          onPressed: () => Navigator.of(context).pop(false),
+        ),
+        FilledButton.icon(
+          onPressed: () async {
+            final prefs = await SharedPreferences.getInstance();
+            final savedPin = prefs.getString('PIN') ?? '532563';
+
+            if (pinController.text == savedPin) {
+              Navigator.of(context).pop(true);
+            } else {
+             ScaffoldMessenger.of(context).hideCurrentSnackBar();
+ScaffoldMessenger.of(context).showSnackBar(
+  SnackBar(
+    behavior: SnackBarBehavior.floating,
+    margin: const EdgeInsets.fromLTRB(16, 16, 16, 650), // muncul di atas layar
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+    backgroundColor: Colors.redAccent.shade400,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    elevation: 6,
+    content: Row(
+      children: const [
+        Icon(Icons.error_outline, color: Colors.white),
+        SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            'PIN salah!',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    ),
+  ),
+);
+
+            }
+          },
+          icon: const Icon(Icons.check_circle_rounded),
+          label: const Text('Verifikasi'),
+          style: FilledButton.styleFrom(
+            backgroundColor: Colors.blue.shade600,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+      ],
+    ),
+  ],
+)
+
+          ),
+        );
+      },
+    ) ?? false;
+
+    if (pinCorrect) {
+      Navigator.push(
+        navigatorKey.currentContext!,
+        MaterialPageRoute(builder: (_) => const AdminPage()),
+      );
+    }
+  },
+),
+                    _buildMenuItem(
+                      icon: Icons.info_outline,
+                      title: 'Tentang Aplikasi',
+                      color: Colors.orange.shade600,
+                      onTap: () {
+                        Navigator.pop(context); // Tutup menu bawah
+                        _showAboutAppDialog(); // Panggil dialog info
+                      },
+                    ),                  _buildMenuItem(
                     icon: Icons.power_settings_new,
                     title: 'Keluar Aplikasi',
                     color: Colors.red.shade600,
@@ -627,6 +900,273 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+void _showAboutAppDialog() {
+  showGeneralDialog(
+    context: context,
+    barrierLabel: "About App",
+    barrierDismissible: true,
+    transitionDuration: const Duration(milliseconds: 300),
+    pageBuilder: (context, anim1, anim2) {
+      return SafeArea(
+        child: Scaffold(
+          backgroundColor: Colors.grey.shade100,
+          appBar: AppBar(
+            backgroundColor: Colors.indigo.shade600,
+            title: const Text('Tentang Aplikasi Exam-D'),
+            centerTitle: true,
+            elevation: 0,
+          ),
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Informasi Umum
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8)],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Aplikasi Exam-D ini dibuat untuk membantu anda mengerjakan ujian secara jujur dan nyaman.',
+                        style: TextStyle(fontSize: 16, color: Colors.grey.shade800),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Hal-hal penting yang harus diketahui:',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.indigo.shade700,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.lock, color: Colors.indigo.shade700, size: 24),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: const [
+                                Text('Mode Ujian Aman', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
+                                SizedBox(height: 4),
+                                Text(
+                                  'Aplikasi akan mengunci layar HP/tablet agar fokus pada ujian ("Pin Layar").',
+                                  style: TextStyle(color: Colors.black87),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.security, color: Colors.indigo.shade700, size: 24),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: const [
+                                Text('Izin Khusus', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
+                                SizedBox(height: 4),
+                                Text(
+                                  'Untuk bisa mengunci layar, aplikasi butuh izin "Device Admin". Izin ini hanya untuk mengamankan ujian.',
+                                  style: TextStyle(color: Colors.black87),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.play_arrow, color: Colors.indigo.shade700, size: 24),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: const [
+                                Text('Ujian Dimulai Otomatis', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
+                                SizedBox(height: 4),
+                                Text(
+                                  'Setelah klik start, Pin Layar aktif otomatis dan ujian segera dimulai.',
+                                  style: TextStyle(color: Colors.black87),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // Larangan
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8)],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Larangan Penting Selama Ujian:',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red.shade700,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.block, color: Colors.redAccent, size: 24),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('JANGAN KELUAR PAKSA', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Jangan menekan kombinasi tombol Home, Back, atau Recent Apps. Keluar aplikasi langsung didiskualifikasi.',
+                                  style: TextStyle(color: Colors.red.shade700),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.splitscreen, color: Colors.redAccent, size: 24),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('JANGAN SPLIT LAYAR', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Jangan membagi layar atau membuka aplikasi lain. Bisa didiskualifikasi.',
+                                  style: TextStyle(color: Colors.red.shade700),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.screen_lock_rotation, color: Colors.redAccent, size: 24),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('JANGAN MATIKAN LAYAR TERLALU LAMA', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Layar mati terlalu lama bisa menyebabkan diskualifikasi.',
+                                  style: TextStyle(color: Colors.red.shade700),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.wifi_off, color: Colors.redAccent, size: 24),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('JANGAN MATIKAN WIFI/DATA', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Pastikan koneksi internet stabil selama ujian.',
+                                  style: TextStyle(color: Colors.red.shade700),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // Catatan tambahan
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8)],
+                  ),
+                  child: Text(
+                    'CATATAN TAMBAHAN: Dalam keadaan darurat, keluar paksa melalui kombinasi tombol mungkin menyebabkan diskualifikasi. Hubungi pengawas jika perlu.',
+                    style: TextStyle(color: Colors.green.shade700),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // Tombol
+                Center(
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.indigo.shade600,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Saya Mengerti', style: TextStyle(fontSize: 16)),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+    transitionBuilder: (context, anim1, anim2, child) {
+      return SlideTransition(
+        position: Tween(begin: const Offset(0, 1), end: Offset.zero).animate(anim1),
+        child: child,
+      );
+    },
+  );
+}
   Future<void> _requestAccess() async {
     String? inputPin = await showDialog<String>(
       context: context,
@@ -647,76 +1187,93 @@ class _LoginPageState extends State<LoginPage> {
               }
             }
 
-           return AlertDialog(
-  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-  title: const Center(
-    child: Text(
-      'Masukkan PIN',
-      style: TextStyle(
-        fontWeight: FontWeight.bold,
-        fontSize: 22,
-        color: Colors.black87,
-      ),
-    ),
-  ),
-  content: SizedBox(
-    width: double.maxFinite,
+         return Dialog(
+  backgroundColor: Colors.white,
+  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+  elevation: 6,
+  child: Padding(
+    padding: const EdgeInsets.all(20),
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-       
+        Text(
+          'Masukkan PIN',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey[900],
+          ),
+        ),
+        const SizedBox(height: 16),
         TextField(
           controller: pinDialogController,
           obscureText: true,
           keyboardType: TextInputType.number,
           maxLength: 6,
-          textAlign: TextAlign.center, // input PIN di tengah
+          textAlign: TextAlign.center,
           decoration: InputDecoration(
             hintText: '••••••',
             errorText: dialogErrorText,
+            filled: true,
+            fillColor: Colors.grey[100],
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide.none,
             ),
             focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Colors.blue, width: 2),
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: Colors.blue.shade400, width: 2),
             ),
             counterText: '',
             contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           ),
           style: const TextStyle(
             fontSize: 24,
-            letterSpacing: 16, // spacing agar tiap digit lebih jelas
+            letterSpacing: 16,
             fontWeight: FontWeight.w500,
           ),
           onSubmitted: (_) => verifyPin(),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 24),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.grey[600],
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+              child: const Text(
+                'Batal',
+                style: TextStyle(fontSize: 16),
+              ),
+            ),
+          ElevatedButton(
+  onPressed: verifyPin,
+  style: ElevatedButton.styleFrom(
+    backgroundColor: Colors.blueAccent.shade400,
+    foregroundColor: Colors.white,
+    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+    elevation: 0,
+    shadowColor: Colors.blueAccent.withOpacity(0.3),
+    textStyle: const TextStyle(
+      fontSize: 16,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.5,
+    ),
+  ),
+  child: const Text('Verifikasi'),
+),
+
+          ],
+        ),
       ],
     ),
   ),
-  actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-  actions: [
-    TextButton(
-      onPressed: () => Navigator.pop(context),
-      child: const Text(
-        'Batal',
-        style: TextStyle(fontSize: 16, color: Colors.grey),
-      ),
-    ),
-    ElevatedButton(
-      onPressed: verifyPin,
-      style: ElevatedButton.styleFrom(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
-      ),
-      child: const Text(
-        'Verifikasi',
-        style: TextStyle(fontSize: 16),
-      ),
-    ),
-  ],
 );
+
 
           },
         );
@@ -733,11 +1290,32 @@ class _LoginPageState extends State<LoginPage> {
         _secondsLeft = 0;
       });
 
-     ScaffoldMessenger.of(context).showSnackBar(
-  const SnackBar(
-    content: Text('Akses diterima'),
-    backgroundColor: Colors.green,  // Tambah warna hijau
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+ScaffoldMessenger.of(context).showSnackBar(
+  SnackBar(
+    behavior: SnackBarBehavior.floating, // mengambang
+    margin: const EdgeInsets.fromLTRB(16, 16, 16, 650), // di atas halaman
+    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+    backgroundColor: Colors.green.shade600, // warna hijau modern
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    elevation: 6,
+    content: Row(
+      children: const [
+        Icon(Icons.check_circle_outline, color: Colors.white),
+        SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            'Akses diterima',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    ),
   ),
+
 );
 
     }
@@ -814,11 +1392,19 @@ class _LoginPageState extends State<LoginPage> {
   ? Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(
-          Icons.warning_amber_rounded,
-          size: 80,
-          color: Colors.redAccent,
-        ),
+        Container(
+  padding: const EdgeInsets.all(16),
+  decoration: BoxDecoration(
+    color: Colors.redAccent.withOpacity(0.1),
+    borderRadius: BorderRadius.circular(12),
+  ),
+  child: Icon(
+    Icons.warning_rounded,
+    size: 36,
+    color: Colors.redAccent,
+  ),
+),const SizedBox(height: 12),
+
        
       ],
     )
@@ -861,60 +1447,81 @@ class _LoginPageState extends State<LoginPage> {
       ],
     ),
 
-                      if (_secondsLeft > 0) ...[
-                        const Text(
-                          'Anda dalam masa penalti',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Colors.redAccent,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 10),
-                          decoration: BoxDecoration(
-                            color: Colors.orange.shade100,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            'Sisa waktu: ${_formatDuration(_secondsLeft)}',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.deepOrange,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: _requestAccess,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue.shade700,
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(25),
-                              ),
-                              elevation: 0,
-                              shadowColor:
-                                  Colors.blue.shade700.withOpacity(0.5),
-                            ),
-                            child: const Text(
-                              'Minta Hak Akses',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                letterSpacing: 1.2,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                    if (_secondsLeft > 0) ...[
+  Column(
+    crossAxisAlignment: CrossAxisAlignment.center,
+    children: [
+      Text(
+        'Anda dalam masa penalti',
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          color: Colors.redAccent,
+        ),
+        textAlign: TextAlign.center,
+      ),
+      const SizedBox(height: 12),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.orange.shade50,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.orange.shade200),
+        ),
+        child: Text(
+          'Sisa waktu: ${_formatDuration(_secondsLeft)}',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.deepOrange.shade700,
+          ),
+        ),
+      ),
+      const SizedBox(height: 20),
+     SizedBox(
+  width: double.infinity,
+  child: ElevatedButton(
+    onPressed: _requestAccess,
+    style: ElevatedButton.styleFrom(
+      backgroundColor: Colors.blue.shade600,
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(30), // lebih rounded
+      ),
+      elevation: 0, // modern look, flat
+      shadowColor: Colors.transparent, // hilangkan bayangan tajam
+    ).copyWith(
+      // menambahkan ripple effect transparan & overlay
+      overlayColor: MaterialStateProperty.resolveWith<Color?>(
+        (Set<MaterialState> states) {
+          if (states.contains(MaterialState.pressed)) return Colors.blue.shade400.withOpacity(0.3);
+          return null;
+        },
+      ),
+    ),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.lock_open, color: Colors.white),
+        const SizedBox(width: 10),
+        const Text(
+          'Minta Hak Akses',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ],
+    ),
+  ),
+),
+
+    ],
+  ),
+]
+
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -966,7 +1573,7 @@ class _LoginPageState extends State<LoginPage> {
                                             width: 2),
                                       ),
                                       suffixIcon: Container(
-                                        margin: const EdgeInsets.all(6),
+                                      margin: const EdgeInsets.only(left: 4, top: 4, right: 8, bottom: 4),
                                         decoration: BoxDecoration(
                                           color: Colors.blue.shade700,
                                           borderRadius:
@@ -1231,31 +1838,54 @@ Future<void> _fetchPenaltyDurationFromFirestore() async {
 
     if (docSnap.exists) {
       final data = docSnap.data();
-      if (data != null && data.containsKey('int_penalty')) {
-        final dynamic penaltyValue = data['int_penalty'];
-        int penaltyInt;
+      if (data != null) {
+        final prefs = await SharedPreferences.getInstance();
 
-        if (penaltyValue is int) {
-          penaltyInt = penaltyValue;
-        } else if (penaltyValue is String) {
-          penaltyInt = int.tryParse(penaltyValue) ?? 1800; // default 1800 detik
+        // --- Ambil int_penalty ---
+        if (data.containsKey('int_penalty')) {
+          final dynamic penaltyValue = data['int_penalty'];
+          int penaltyInt;
+
+          if (penaltyValue is int) {
+            penaltyInt = penaltyValue;
+          } else if (penaltyValue is String) {
+            penaltyInt = int.tryParse(penaltyValue) ?? 1800; // default 1800 detik
+          } else {
+            penaltyInt = 1800;
+          }
+
+          await prefs.setInt('int_penalty', penaltyInt);
+          print('✅ int_penalty disimpan ke SharedPreferences: $penaltyInt');
         } else {
-          penaltyInt = 1800;
+          print('⚠️ int_penalty tidak ditemukan di dokumen remote/global');
         }
 
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setInt('int_penalty', penaltyInt);
-        print('✅ int_penalty disimpan ke SharedPreferences: $penaltyInt');
-      } else {
-        print('⚠️ int_penalty tidak ditemukan di dokumen remote/global');
+        // --- Ambil PIN_start ---
+        if (data.containsKey('PIN_start')) {
+          final pinStartValue = data['PIN_start'].toString();
+          await prefs.setString('PIN', pinStartValue);
+          print('✅ PIN_start disimpan ke SharedPreferences: $pinStartValue');
+        } else {
+          print('⚠️ PIN_start tidak ditemukan di dokumen remote/global');
+        }
+
+        // --- LOG seluruh isi SharedPreferences ---
+        print('📦 [LOG] Isi SharedPreferences saat ini:');
+        final keys = prefs.getKeys();
+        for (String key in keys) {
+          final value = prefs.get(key);
+          print(' - $key : $value');
+        }
+
       }
     } else {
       print('⚠️ Dokumen global di koleksi remote tidak ada');
     }
   } catch (e) {
-    print('❌ Gagal fetch int_penalty dari Firestore: $e');
+    print('❌ Gagal fetch int_penalty dan PIN_start dari Firestore: $e');
   }
 }
+
 
 Future<void> _fetchTestTimeAndSave() async {
   try {

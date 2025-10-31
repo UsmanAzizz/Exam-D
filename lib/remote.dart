@@ -3,15 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'run_test.dart';
-import 'package:webdipo/run_test.dart' show LockTaskHelper; // Import LockTaskHelper
+import 'package:webdipo/run_test.dart' show LockTaskHelper;
 
 class RemoteAccess extends StatefulWidget {
-  // Placeholder for PopupMenuButton, as it was not found in the original file.
-  // The original search string was looking for an existing PopupMenuItem within an itemBuilder,
-  // but no such structure exists in this file. To proceed with the instruction
-  // to add a PopupMenuItem, a suitable anchor point needs to be identified.
-  // This corrected search targets the class definition as a general insertion point.
-
   const RemoteAccess({Key? key}) : super(key: key);
 
   @override
@@ -21,18 +15,20 @@ class RemoteAccess extends StatefulWidget {
 class _RemoteAccessState extends State<RemoteAccess> {
   static const MethodChannel _windowModeChannel =
       MethodChannel('com.example.webdipo/window_mode');
+
   bool _pinningAttempted = false;
   bool _alreadyNavigated = false;
-  bool _isLoadingPinning = true; // New state to show loading for pinning
+  bool _isLoadingPinning = true;
   String? _onlineTestLink;
-  String _pinningStatusMessage = 'Memulai mode ujian aman...'; // Default message
-  IconData? _pinningStatusIcon; // Icon for status
-  Timer? _lockTaskCheckTimer; // Tambahkan ini
+  String _pinningStatusMessage = 'Menyiapkan mode ujian aman...';
+  IconData? _pinningStatusIcon;
+  Timer? _lockTaskCheckTimer;
+  int _countdown = 3;
 
   @override
   void initState() {
     super.initState();
-    print('[RemoteAccess] initState called.');
+    debugPrint('[RemoteAccess] initState');
     _navigateToTest();
   }
 
@@ -40,117 +36,226 @@ class _RemoteAccessState extends State<RemoteAccess> {
     final prefs = await SharedPreferences.getInstance();
     final link = prefs.getString('online_test_link');
 
-    print('[RemoteAccess] online_test_link: $link'); // Log the link
+    debugPrint('[RemoteAccess] online_test_link: $link');
 
-    // Ensure the widget is still mounted before navigating
     if (!mounted) return;
 
     if (link != null && link.isNotEmpty) {
       setState(() {
         _onlineTestLink = link;
-        _isLoadingPinning = true; // Start loading for pinning
+        _isLoadingPinning = true;
       });
-      _startPinningProcess(); // Call the new pinning process
+      _startPinningProcess();
     } else {
-      print('[RemoteAccess] Link ujian online tidak ditemukan atau kosong.');
-      // If the link is not found, show an error and pop the page
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Link ujian online tidak ditemukan. Silakan sinkronkan konfigurasi.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      // Pop back to the previous screen (LoginPage)
-      Navigator.pop(context);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+                'Link ujian online tidak ditemukan. Silakan sinkronkan konfigurasi.'),
+            backgroundColor: Colors.red.shade600,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        Navigator.pop(context);
+      }
     }
   }
-
-
 
   Future<void> _startPinningProcess() async {
     if (_pinningAttempted) return;
     _pinningAttempted = true;
 
-    // Panggil startLockTask() untuk memicu dialog Pin Layar dari Android
-    print('[RemoteAccess] Memanggil LockTaskHelper.startLockTask() untuk memicu Pin Layar...');
-    bool started = await LockTaskHelper.startLockTask();
-    print('[RemoteAccess] LockTaskHelper.startLockTask() returned: $started');
+    debugPrint('[RemoteAccess] Memulai proses LockTask...');
+    final started = await LockTaskHelper.startLockTask();
+    debugPrint('[RemoteAccess] LockTask start result: $started');
 
     if (!started) {
-      // Jika startLockTask() gagal, tampilkan pesan error dan hentikan pemantauan
       if (mounted) {
         setState(() {
-          _pinningStatusMessage = 'Gagal memicu Pin Layar. Pastikan Device Admin aktif.';
-          _pinningStatusIcon = Icons.error;
+          _pinningStatusMessage =
+              'Gagal memulai mode aman.\nPastikan izin Device Admin aktif.';
+          _pinningStatusIcon = Icons.error_outline_rounded;
           _isLoadingPinning = false;
         });
       }
       return;
     }
 
-    // Tampilkan UI loading dan pesan
-    if (mounted) {
-      setState(() {
-        _pinningStatusMessage = 'Pin Layar sedang diaktifkan. Mohon konfirmasi jika diminta.';
-        _pinningStatusIcon = null; // Kembali ke CircularProgressIndicator
-        _isLoadingPinning = true;
-      });
-    }
+    setState(() {
+      _pinningStatusMessage = 'Mengaktifkan mode ujian aman';
+      _pinningStatusIcon = null;
+      _isLoadingPinning = true;
+    });
 
-    // Mulai memantau status Lock Task
     _lockTaskCheckTimer?.cancel();
-    _lockTaskCheckTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
-      final bool isLockTaskActive = await LockTaskHelper.checkLockTask();
-      print('[RemoteAccess] Memantau Lock Task - isLockTaskActive = $isLockTaskActive');
+    _lockTaskCheckTimer =
+        Timer.periodic(const Duration(seconds: 1), (timer) async {
+      final isLockTaskActive = await LockTaskHelper.checkLockTask();
+      debugPrint('[RemoteAccess] Monitoring: isLockTaskActive = $isLockTaskActive');
 
       if (isLockTaskActive) {
-        timer.cancel(); // Hentikan timer
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => RunTest(ipAddress: _onlineTestLink!),
-            ),
-          );
-        }
-      } else {
-        // Jika Lock Task belum aktif, bisa tampilkan pesan atau instruksi ulang
+        timer.cancel();
         if (mounted) {
           setState(() {
-            _pinningStatusMessage = 'Pin Layar belum aktif. Mohon konfirmasi jika diminta.';
-            _pinningStatusIcon = Icons.warning;
-            _isLoadingPinning = false; // Selesai loading, siap untuk interaksi pengguna
+            _pinningStatusIcon = Icons.check_circle_rounded;
+            _pinningStatusMessage =
+                'Mengaktifkan mode aman..\nMemulai tes dalam $_countdown...';
+            _isLoadingPinning = false;
+          });
+
+          // Countdown 3-2-1 sebelum navigasi
+          Timer.periodic(const Duration(seconds: 1), (countdownTimer) {
+            if (!mounted) {
+              countdownTimer.cancel();
+              return;
+            }
+
+            if (_countdown == 1) {
+              countdownTimer.cancel();
+              if (!_alreadyNavigated) {
+                _alreadyNavigated = true;
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => RunTest(ipAddress: _onlineTestLink!),
+                  ),
+                );
+              }
+            } else {
+              setState(() {
+                _countdown--;
+                _pinningStatusMessage =
+                    'Mengaktifkan mode aman..\nMemulai tes dalam $_countdown...';
+              });
+            }
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _pinningStatusMessage =
+                'Mode aman belum aktif.\nMohon konfirmasi jika diminta.';
+            _pinningStatusIcon = Icons.warning_amber_rounded;
+            _isLoadingPinning = false;
           });
         }
       }
     });
   }
-  
+
+  @override
+  void dispose() {
+    _lockTaskCheckTimer?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final accent = theme.colorScheme.primary;
+
     return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _pinningStatusIcon != null
-                ? Icon(_pinningStatusIcon, size: 48, color: _pinningStatusIcon == Icons.check_circle ? Colors.green : Colors.red)
-                : const CircularProgressIndicator(),
-            const SizedBox(height: 20),
-            Text(
-              _pinningStatusMessage,
-              style: const TextStyle(fontSize: 18),
-              textAlign: TextAlign.center,
-            ),
-            if (_pinningStatusIcon == null) // Only show this hint if still loading
-              const Text(
-                '(Mohon konfirmasi pin layar jika diminta)',
-                style: TextStyle(fontSize: 14, color: Colors.grey),
-                textAlign: TextAlign.center,
+      backgroundColor: theme.colorScheme.surface,
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: Column(
+                key: ValueKey(_pinningStatusMessage),
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 400),
+                    padding: const EdgeInsets.all(28),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _pinningStatusIcon == Icons.error_outline_rounded
+                          ? Colors.red.shade50
+                          : _pinningStatusIcon == Icons.warning_amber_rounded
+                              ? Colors.amber.shade50
+                              : _pinningStatusIcon == Icons.check_circle_rounded
+                                  ? Colors.green.shade50
+                                  : accent.withOpacity(0.12),
+                      border: Border.all(
+                        color: _pinningStatusIcon == Icons.error_outline_rounded
+                            ? Colors.red.shade400
+                            : _pinningStatusIcon == Icons.warning_amber_rounded
+                                ? Colors.amber.shade400
+                                : _pinningStatusIcon == Icons.check_circle_rounded
+                                    ? Colors.green.shade400
+                                    : accent.withOpacity(0.25),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: _pinningStatusIcon != null
+                        ? Icon(
+                            _pinningStatusIcon,
+                            size: 60,
+                            color: _pinningStatusIcon == Icons.error_outline_rounded
+                                ? Colors.red.shade700
+                                : _pinningStatusIcon == Icons.warning_amber_rounded
+                                    ? Colors.amber.shade700
+                                    : Colors.green.shade700,
+                          )
+                        : SizedBox(
+                            width: 48,
+                            height: 48,
+                            child: CircularProgressIndicator(
+                              color: accent,
+                              strokeWidth: 3,
+                            ),
+                          ),
+                  ),
+                  const SizedBox(height: 32),
+                  Text(
+                    _pinningStatusMessage,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onSurface,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  if (_pinningStatusIcon == null)
+                    Text(
+                      '(Mohon konfirmasi pin layar jika diminta)',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: Colors.grey.shade500,
+                        fontStyle: FontStyle.italic,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  const SizedBox(height: 40),
+                  if (!_isLoadingPinning &&
+                      _pinningStatusIcon != Icons.check_circle_rounded)
+                    FilledButton.icon(
+                      icon: const Icon(Icons.refresh_rounded, size: 20),
+                      label: const Text('Coba Lagi'),
+                      onPressed: () {
+                        setState(() {
+                          _pinningAttempted = false;
+                          _startPinningProcess();
+                        });
+                      },
+                      style: FilledButton.styleFrom(
+                        backgroundColor: accent,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 28, vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                    ),
+                ],
               ),
-          ],
+            ),
+          ),
         ),
       ),
     );
   }
-  }
+}

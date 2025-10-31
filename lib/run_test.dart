@@ -263,11 +263,13 @@ double _opacity = 0.0;
   Future<void> _checkInitialWindowMode() async {
     print('🔥 Flutter: calling isInMultiWindowMode...');
     bool isFloatingWindow = await WindowModeHelper.isInMultiWindowMode();
-    print('🔥 Flutter: isInMultiWindowMode returned $isFloatingWindow');
+    print('🔥 Flutter: isInMultiWindowMode returned $isFloatingWindow'); // <-- Tambahkan log ini
 
     if (isFloatingWindow && mounted) {
-      print('❗ Detected multi-window mode saat halaman dimuat');
+      print('❗ Detected multi-window mode saat halaman dimuat. Memicu penalti.'); // <-- Tambahkan log ini
       await _handleMultiWindowDetected(); // Peringatan + kembali ke MyApp
+    } else {
+      print('✅ Multi-window mode TIDAK terdeteksi saat halaman dimuat.'); // <-- Tambahkan log ini
     }
   }
 
@@ -405,6 +407,14 @@ double _opacity = 0.0;
 
     if (state == AppLifecycleState.inactive ||
         state == AppLifecycleState.paused) {
+      // --- Tambahkan pengecekan Lock Task di sini ---
+      final bool isLockTaskActive = await LockTaskHelper.checkLockTask();
+      if (isLockTaskActive) {
+        print('[Lifecycle] Lock Task Mode aktif, abaikan penalti saat layar mati/aplikasi di background.');
+        return; // Abaikan penalti
+      }
+      // --- Akhir pengecekan Lock Task ---
+
       _isInBackground = true;
 
       // Jika di WiFi settings atau dalam grace period, abaikan penalti
@@ -616,110 +626,101 @@ Future<void> checkPinVerified() async {
             final countdownText =
                 'Tunggu ${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')} sebelum keluar.';
 
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16)),
-              title: const Column(
-                children: [
-                  Icon(Icons.exit_to_app, size: 48, color: Colors.redAccent),
-                  SizedBox(height: 8),
-                  Text(
-                    'Konfirmasi',
-                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 18),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-              content: Text(
-                canExit
-                    ? 'Apakah Anda yakin ingin keluar dari tes?'
-                    : countdownText,
-                style: const TextStyle(fontSize: 16),
-                textAlign: TextAlign.center,
-              ),
-              actionsPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              actions: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+            return Dialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              elevation: 6,
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    TextButton(
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.grey[700],
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 12),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent.withOpacity(0.1),
+                        shape: BoxShape.circle,
                       ),
-                      onPressed: () {
-                        timer?.cancel();
-                        Navigator.of(context).pop(false);
-                      },
-                      child: const Text('Batal'),
+                      child: const Icon(
+                        Icons.exit_to_app_rounded,
+                        color: Colors.redAccent,
+                        size: 48,
+                      ),
                     ),
-                    Expanded(
-                      child: Container(
-                        height: 48,
-                        child: ElevatedButton(
-                          onPressed: canExit
-                              ? () async {
-                                  timer?.cancel();
-
-                                  final prefs =
-                                      await SharedPreferences.getInstance();
-
-                                  final existingTestTime =
-                                      prefs.getInt('test_time');
-
-                                  if (existingTestTime != null) {
-                                    await prefs.setInt(
-                                        'test_time', existingTestTime);
-                                    print(
-                                        '♻️ test_time disimpan ulang: $existingTestTime');
-                                  } else {
-                                    print(
-                                        '⚠️ test_time tidak ditemukan saat ingin disimpan ulang');
-                                  }
-
-                                  Navigator.of(context).pop(true);
-                                   await checkPinVerified();
-                                }
-                              : null,
-                          style: ButtonStyle(
-                            backgroundColor:
-                                MaterialStateProperty.resolveWith<Color>(
-                              (states) =>
-                                  states.contains(MaterialState.disabled)
-                                      ? Colors.grey
-                                      : Colors.redAccent,
-                            ),
-                            foregroundColor:
-                                MaterialStateProperty.all(Colors.white),
-                            padding: MaterialStateProperty.all(
-                              const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 12),
-                            ),
-                            shape: MaterialStateProperty.all(
-                              RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
+                    const SizedBox(height: 20),
+                    Text(
+                      canExit ? 'Yakin ingin keluar?' : 'Waktu tersisa:',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[900],
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      canExit
+                          ? 'Semua progres ujian akan disimpan.'
+                          : countdownText,
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey[700],
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () {
+                              timer?.cancel();
+                              Navigator.of(context).pop(false);
+                            },
+                            style: TextButton.styleFrom(
+                              foregroundColor: Colors.grey[700],
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
                               ),
                             ),
-                            elevation:
-                                MaterialStateProperty.resolveWith<double>(
-                              (states) =>
-                                  states.contains(MaterialState.disabled)
-                                      ? 0
-                                      : 3,
-                            ),
-                            shadowColor: MaterialStateProperty.all(
-                              Colors.redAccent.withOpacity(0.1),
-                            ),
+                            child: const Text('Batal'),
                           ),
-                          child: Text(canExit ? 'Ya, Keluar' : 'Tunggu..'),
                         ),
-                      ),
-                    )
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: canExit
+                                ? () async {
+                                    timer?.cancel();
+                                    final prefs = await SharedPreferences.getInstance();
+                                    final existingTestTime = prefs.getInt('test_time');
+                                    if (existingTestTime != null) {
+                                      await prefs.setInt('test_time', existingTestTime);
+                                      print('♻️ test_time disimpan ulang: $existingTestTime');
+                                    } else {
+                                      print('⚠️ test_time tidak ditemukan saat ingin disimpan ulang');
+                                    }
+                                    Navigator.of(context).pop(true);
+                                    await checkPinVerified();
+                                  }
+                                : null,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.redAccent,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            child: Text(canExit ? 'Keluar' : 'Tunggu..'),
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
-              ],
+              ),
             );
           },
         );
@@ -756,149 +757,83 @@ Future<void> checkPinVerified() async {
         },
         child: Scaffold(
           appBar: AppBar(
-            automaticallyImplyLeading: false,
-            elevation: 0,
-            backgroundColor: Colors.white,
-            // toolbarHeight: 53,
-            title: Row(
-              children: [
-                Expanded(
-                  child: Container(
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[200],
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    padding: const EdgeInsets.only(left: 12, right: 8),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.language,
-                            color: Colors.blueAccent, size: 20),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: (_pageTitle == null || _pageTitle!.isEmpty)
-                              ? const SizedBox.shrink()
-                              : Text(
-                                  _pageTitle!,
-                                  style: const TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.black87,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                        ),
-                        Container(width: 8),
-                        IconButton(
-                          icon: const Icon(Icons.refresh,
-                              color: Colors.blueAccent, size: 20),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          onPressed: () async {
-                            try {
-                              final currentUrl = await _controller.currentUrl();
-                              if (!mounted) return;
-                              if (currentUrl != null) {
-                                // Kamu bisa update title di sini juga kalau mau
-                              }
-                              await _controller.reload();
-                            } catch (e) {
-                              if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Gagal memuat ulang: $e')),
-                              );
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      height: 40,
-                      width: 36,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      padding: EdgeInsets.zero,
-                      margin: const EdgeInsets.only(left: 4),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: PopupMenuButton<int>(
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16)),
-                          icon: const Icon(Icons.more_vert,
-                              color: Colors.black, size: 20),
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 36),
-                          onSelected: (value) async {
-                            if (value == 1) {
-                              setState(() {
-                                _isInWifiSettings = true;
-                              });
-                              await WifiSettings.openWifiSettings();
-                            } else if (value == 2) {
-                              _confirmExit();
-                            }
-                          },
-                          itemBuilder: (context) => [
-                            PopupMenuItem(
-                              value: 1,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.wifi,
-                                      color: Colors.blue, size: 20),
-                                  const SizedBox(width: 12),
-                                  const Expanded(
-                                    child: Text(
-                                      'Pengaturan WiFi',
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.black,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            PopupMenuItem(
-                              value: 2,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.exit_to_app,
-                                      color: Colors.redAccent, size: 20),
-                                  const SizedBox(width: 12),
-                                  const Expanded(
-                                    child: Text(
-                                      'Selesai Tes',
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.black,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+  automaticallyImplyLeading: false,
+elevation: 0,
+  backgroundColor: Colors.white,
+  title: Row(
+    children: [
+      Expanded(
+        child: Text(
+          _pageTitle ?? "Status : Running",
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+      // Tombol reload
+      IconButton(
+        onPressed: () async {
+          try {
+            final currentUrl = await _controller.currentUrl();
+            if (!mounted) return;
+            if (currentUrl != null) {
+              // Update title jika perlu
+            }
+            await _controller.reload();
+          } catch (e) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Gagal memuat ulang: $e')),
+            );
+          }
+        },
+        icon: const Icon(Icons.refresh, color: Colors.blueAccent),
+        tooltip: 'Muat ulang',
+      ),
+      // Menu lebih modern
+      PopupMenuButton<int>(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        icon: const Icon(Icons.more_vert, color: Colors.black87),
+        onSelected: (value) async {
+          if (value == 1) {
+            setState(() {
+              _isInWifiSettings = true;
+            });
+            await WifiSettings.openWifiSettings();
+          } else if (value == 2) {
+            _confirmExit();
+          }
+        },
+        itemBuilder: (context) => [
+          PopupMenuItem(
+            value: 1,
+            child: Row(
+              children: const [
+                Icon(Icons.wifi, color: Colors.blue),
+                SizedBox(width: 12),
+                Text('Pengaturan WiFi', style: TextStyle(fontWeight: FontWeight.w600)),
               ],
             ),
+          ),
+          PopupMenuItem(
+            value: 2,
+            child: Row(
+              children: const [
+                Icon(Icons.exit_to_app, color: Colors.redAccent),
+                SizedBox(width: 12),
+                Text('Selesai Tes', style: TextStyle(fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ],
+  ),
+
           ),
         body: SafeArea(
   child: AnimatedOpacity(
