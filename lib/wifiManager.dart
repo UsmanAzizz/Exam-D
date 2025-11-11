@@ -305,7 +305,7 @@ class _WifiManagerPageState extends State<WifiManagerPage> {
                           ],
                           ...otherList
                               .map((network) => _buildWifiTile(network!, false))
-                              .toList(),
+                              ,
                         ],
                       ),
                     ),

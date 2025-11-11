@@ -12,7 +12,6 @@ import 'run_test.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'remote.dart'; // Import halaman baru
 import 'fetch_config.dart';
-import 'package:flutter_speed_dial/flutter_speed_dial.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -276,7 +275,7 @@ class _SplashDeciderState extends State<SplashDecider> {
     }
   } catch (e) {
     print('❌ Gagal fetch data remote/local: $e');
-    throw e; // Lempar error supaya bisa ditangkap di luar
+    rethrow; // Lempar error supaya bisa ditangkap di luar
   }
 }
 
@@ -686,8 +685,8 @@ ScaffoldMessenger.of(context).showSnackBar(
     backgroundColor: Colors.redAccent.shade400,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     elevation: 6,
-    content: Row(
-      children: const [
+    content: const Row(
+      children: [
         Icon(Icons.error_outline, color: Colors.white),
         SizedBox(width: 12),
         Expanded(
@@ -885,7 +884,7 @@ ScaffoldMessenger.of(context).showSnackBar(
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => RemoteAccess(), // Navigate to RemoteAccess
+            builder: (context) => const RemoteAccess(), // Navigate to RemoteAccess
           ),
         );
       } else {
@@ -927,7 +926,7 @@ void _showAboutAppDialog() {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
-                    boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8)],
+                    boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8)],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -951,10 +950,10 @@ void _showAboutAppDialog() {
                         children: [
                           Icon(Icons.lock, color: Colors.indigo.shade700, size: 24),
                           const SizedBox(width: 12),
-                          Expanded(
+                          const Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
-                              children: const [
+                              children: [
                                 Text('Mode Ujian Aman', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
                                 SizedBox(height: 4),
                                 Text(
@@ -972,10 +971,10 @@ void _showAboutAppDialog() {
                         children: [
                           Icon(Icons.security, color: Colors.indigo.shade700, size: 24),
                           const SizedBox(width: 12),
-                          Expanded(
+                          const Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
-                              children: const [
+                              children: [
                                 Text('Izin Khusus', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
                                 SizedBox(height: 4),
                                 Text(
@@ -993,10 +992,10 @@ void _showAboutAppDialog() {
                         children: [
                           Icon(Icons.play_arrow, color: Colors.indigo.shade700, size: 24),
                           const SizedBox(width: 12),
-                          Expanded(
+                          const Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
-                              children: const [
+                              children: [
                                 Text('Ujian Dimulai Otomatis', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
                                 SizedBox(height: 4),
                                 Text(
@@ -1020,7 +1019,7 @@ void _showAboutAppDialog() {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
-                    boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8)],
+                    boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8)],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1037,13 +1036,13 @@ void _showAboutAppDialog() {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.block, color: Colors.redAccent, size: 24),
+                          const Icon(Icons.block, color: Colors.redAccent, size: 24),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('JANGAN KELUAR PAKSA', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                                const Text('JANGAN KELUAR PAKSA', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)),
                                 const SizedBox(height: 4),
                                 Text(
                                   'Jangan menekan kombinasi tombol Home, Back, atau Recent Apps. Keluar aplikasi langsung didiskualifikasi.',
@@ -1058,13 +1057,13 @@ void _showAboutAppDialog() {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.splitscreen, color: Colors.redAccent, size: 24),
+                          const Icon(Icons.splitscreen, color: Colors.redAccent, size: 24),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('JANGAN SPLIT LAYAR', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                                const Text('JANGAN SPLIT LAYAR', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)),
                                 const SizedBox(height: 4),
                                 Text(
                                   'Jangan membagi layar atau membuka aplikasi lain. Bisa didiskualifikasi.',
@@ -1079,13 +1078,13 @@ void _showAboutAppDialog() {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.screen_lock_rotation, color: Colors.redAccent, size: 24),
+                          const Icon(Icons.screen_lock_rotation, color: Colors.redAccent, size: 24),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('JANGAN MATIKAN LAYAR TERLALU LAMA', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                                const Text('JANGAN MATIKAN LAYAR TERLALU LAMA', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)),
                                 const SizedBox(height: 4),
                                 Text(
                                   'Layar mati terlalu lama bisa menyebabkan diskualifikasi.',
@@ -1100,13 +1099,13 @@ void _showAboutAppDialog() {
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.wifi_off, color: Colors.redAccent, size: 24),
+                          const Icon(Icons.wifi_off, color: Colors.redAccent, size: 24),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('JANGAN MATIKAN WIFI/DATA', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)),
+                                const Text('JANGAN MATIKAN WIFI/DATA', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.redAccent)),
                                 const SizedBox(height: 4),
                                 Text(
                                   'Pastikan koneksi internet stabil selama ujian.',
@@ -1129,7 +1128,7 @@ void _showAboutAppDialog() {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
-                    boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8)],
+                    boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8)],
                   ),
                   child: Text(
                     'CATATAN TAMBAHAN: Dalam keadaan darurat, keluar paksa melalui kombinasi tombol mungkin menyebabkan diskualifikasi. Hubungi pengawas jika perlu.',
@@ -1299,8 +1298,8 @@ ScaffoldMessenger.of(context).showSnackBar(
     backgroundColor: Colors.green.shade600, // warna hijau modern
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
     elevation: 6,
-    content: Row(
-      children: const [
+    content: const Row(
+      children: [
         Icon(Icons.check_circle_outline, color: Colors.white),
         SizedBox(width: 12),
         Expanded(
@@ -1398,7 +1397,7 @@ ScaffoldMessenger.of(context).showSnackBar(
     color: Colors.redAccent.withOpacity(0.1),
     borderRadius: BorderRadius.circular(12),
   ),
-  child: Icon(
+  child: const Icon(
     Icons.warning_rounded,
     size: 36,
     color: Colors.redAccent,
@@ -1411,7 +1410,7 @@ ScaffoldMessenger.of(context).showSnackBar(
   : Column(
       children: [
         RichText(
-          text: TextSpan(
+          text: const TextSpan(
             style: TextStyle(
               fontSize: 40,
               fontWeight: FontWeight.bold,
@@ -1422,7 +1421,7 @@ ScaffoldMessenger.of(context).showSnackBar(
               WidgetSpan(
                 alignment: PlaceholderAlignment.top,
                 child: Padding(
-                  padding: const EdgeInsets.only(right: 2, bottom: 0),
+                  padding: EdgeInsets.only(right: 2, bottom: 0),
                   child: Icon(
                     Icons.language,
                     size: 44,
@@ -1451,7 +1450,7 @@ ScaffoldMessenger.of(context).showSnackBar(
   Column(
     crossAxisAlignment: CrossAxisAlignment.center,
     children: [
-      Text(
+      const Text(
         'Anda dalam masa penalti',
         style: TextStyle(
           fontSize: 18,
@@ -1492,19 +1491,19 @@ ScaffoldMessenger.of(context).showSnackBar(
       shadowColor: Colors.transparent, // hilangkan bayangan tajam
     ).copyWith(
       // menambahkan ripple effect transparan & overlay
-      overlayColor: MaterialStateProperty.resolveWith<Color?>(
-        (Set<MaterialState> states) {
-          if (states.contains(MaterialState.pressed)) return Colors.blue.shade400.withOpacity(0.3);
+      overlayColor: WidgetStateProperty.resolveWith<Color?>(
+        (Set<WidgetState> states) {
+          if (states.contains(WidgetState.pressed)) return Colors.blue.shade400.withOpacity(0.3);
           return null;
         },
       ),
     ),
-    child: Row(
+    child: const Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Icon(Icons.lock_open, color: Colors.white),
-        const SizedBox(width: 10),
-        const Text(
+        Icon(Icons.lock_open, color: Colors.white),
+        SizedBox(width: 10),
+        Text(
           'Minta Hak Akses',
           style: TextStyle(
             fontSize: 18,
@@ -1823,7 +1822,7 @@ Future<void> _fetchLocalData() async {
     }
   } catch (e) {
     print('❌ Gagal fetch data remote/local: $e');
-    throw e; // Lempar error supaya bisa ditangkap di luar
+    rethrow; // Lempar error supaya bisa ditangkap di luar
   }
 }
 

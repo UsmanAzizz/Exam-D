@@ -307,8 +307,8 @@ class _LocalServerPageState extends State<LocalServerPage> {
                               if (!canSync) {
                                 if (mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: const Text(
+                                    const SnackBar(
+                                      content: Text(
                                           'Sinkronisasi hanya diperbolehkan setiap 2 bulan.'),
                                       backgroundColor: Colors.orange,
                                     ),
@@ -557,40 +557,42 @@ class _LocalServerPageState extends State<LocalServerPage> {
                                 : null,
                             style: ButtonStyle(
                               backgroundColor:
-                                  MaterialStateProperty.resolveWith<Color>(
+                                  WidgetStateProperty.resolveWith<Color>(
                                 (states) {
-                                  if (!_isLanjutkanEnabled)
+                                  if (!_isLanjutkanEnabled) {
                                     return Colors.grey.shade300;
-                                  return states.contains(MaterialState.pressed)
+                                  }
+                                  return states.contains(WidgetState.pressed)
                                       ? Colors.white
                                       : Colors.green;
                                 },
                               ),
                               foregroundColor:
-                                  MaterialStateProperty.resolveWith<Color>(
+                                  WidgetStateProperty.resolveWith<Color>(
                                 (states) {
-                                  if (!_isLanjutkanEnabled)
+                                  if (!_isLanjutkanEnabled) {
                                     return Colors.black45;
-                                  return states.contains(MaterialState.pressed)
+                                  }
+                                  return states.contains(WidgetState.pressed)
                                       ? Colors.green
                                       : Colors.white;
                                 },
                               ),
-                              minimumSize: MaterialStateProperty.all(
+                              minimumSize: WidgetStateProperty.all(
                                   const Size.fromHeight(48)),
-                              shape: MaterialStateProperty.all(
+                              shape: WidgetStateProperty.all(
                                 RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
                               elevation:
-                                  MaterialStateProperty.resolveWith<double>(
+                                  WidgetStateProperty.resolveWith<double>(
                                 (states) =>
-                                    states.contains(MaterialState.pressed)
+                                    states.contains(WidgetState.pressed)
                                         ? 0
                                         : 3,
                               ),
-                              shadowColor: MaterialStateProperty.all(
+                              shadowColor: WidgetStateProperty.all(
                                 Colors.green.withOpacity(0.1),
                               ),
                             ),

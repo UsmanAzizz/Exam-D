@@ -36,7 +36,8 @@ dependencies:
   webview_flutter_android: ^3.16.1
   webview_flutter_wkwebview: ^3.10.2
   flutter_local_notifications: ^18.0.1
-  permission_handler: ^11.0.1
+  permission_handler: ^12.0.1
+  permission_handler_android: ^13.0.1
   wifi_info_flutter: ^2.0.2
   connectivity_plus: ^5.0.2
   flutter_background_service: ^5.1.0
@@ -50,6 +51,7 @@ dependencies:
   google_fonts: ^6.2.0
   internet_connection_checker: ^1.0.0+1
   flutter_speed_dial: ^7.0.0
+  
 
 dev_dependencies:
   flutter_test:

@@ -7,7 +7,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webdipo/Accessibility.dart';
-import 'package:webdipo/main.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -126,7 +125,7 @@ double _opacity = 0.0;
       if (isFloating) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
+            const SnackBar(
               content: Text('Penggunaan mode layar saat ini tidak diizinkan!'),
               duration: Duration(seconds: 3),
             ),
@@ -809,20 +808,20 @@ elevation: 0,
           }
         },
         itemBuilder: (context) => [
-          PopupMenuItem(
+          const PopupMenuItem(
             value: 1,
             child: Row(
-              children: const [
+              children: [
                 Icon(Icons.wifi, color: Colors.blue),
                 SizedBox(width: 12),
                 Text('Pengaturan WiFi', style: TextStyle(fontWeight: FontWeight.w600)),
               ],
             ),
           ),
-          PopupMenuItem(
+          const PopupMenuItem(
             value: 2,
             child: Row(
-              children: const [
+              children: [
                 Icon(Icons.exit_to_app, color: Colors.redAccent),
                 SizedBox(width: 12),
                 Text('Selesai Tes', style: TextStyle(fontWeight: FontWeight.w600)),

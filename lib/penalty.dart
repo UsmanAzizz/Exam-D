@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'accessibility.dart'; // pastikan ini path yang benar ke WifiMonitor
 
 class PenaltyPage extends StatefulWidget {
-  const PenaltyPage({Key? key}) : super(key: key);
+  const PenaltyPage({super.key});
 
   @override
   State<PenaltyPage> createState() => _PenaltyPageState();

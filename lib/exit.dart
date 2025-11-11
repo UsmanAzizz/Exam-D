@@ -21,7 +21,7 @@ class _ExitSuccessPageState extends State<ExitSuccessPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return const Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Center(
@@ -33,8 +33,8 @@ class _ExitSuccessPageState extends State<ExitSuccessPage> {
                 color: Colors.green,
                 size: 120,
               ),
-              const SizedBox(height: 24),
-              const Text(
+              SizedBox(height: 24),
+              Text(
                 'Tes Selesai!',
                 style: TextStyle(
                   fontSize: 24,
@@ -42,14 +42,14 @@ class _ExitSuccessPageState extends State<ExitSuccessPage> {
                   color: Colors.green,
                 ),
               ),
-              const SizedBox(height: 12),
-              const Text(
+              SizedBox(height: 12),
+              Text(
                 'Terima kasih sudah menyelesaikan tes.\nAnda akan diarahkan ke halaman login.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 16, color: Colors.black87),
               ),
-              const SizedBox(height: 30),
-              const CircularProgressIndicator(
+              SizedBox(height: 30),
+              CircularProgressIndicator(
                 color: Colors.green,
               ),
             ],

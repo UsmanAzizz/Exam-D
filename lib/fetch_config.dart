@@ -239,7 +239,7 @@ class _ConfigPageState extends State<ConfigPage> {
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ).copyWith(
                       overlayColor:
-                          MaterialStateProperty.all(Colors.transparent),
+                          WidgetStateProperty.all(Colors.transparent),
                     ),
                     child: _loading
                         ? const SizedBox(

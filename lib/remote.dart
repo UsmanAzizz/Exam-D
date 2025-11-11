@@ -3,10 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'run_test.dart';
-import 'package:webdipo/run_test.dart' show LockTaskHelper;
 
 class RemoteAccess extends StatefulWidget {
-  const RemoteAccess({Key? key}) : super(key: key);
+  const RemoteAccess({super.key});
 
   @override
   State<RemoteAccess> createState() => _RemoteAccessState();
